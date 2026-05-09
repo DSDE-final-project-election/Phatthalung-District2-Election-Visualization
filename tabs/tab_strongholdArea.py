@@ -107,13 +107,10 @@ CANDIDATE_PARTY_MAP = {
 }
 
 CATEGORY_ORDER = [
-    "Strong",
+    "แข็งแกร่ง",
     "เฝ้าระวัง",
-    "เสี่ยง",
     "แพ้สูสี",
-    "แพ้ห่าง",
-    "ตามไกล",
-    "ไม่มีข้อมูล",
+    "แพ้ขาด",
 ]
 
 
@@ -163,16 +160,13 @@ def _lighten_hex(hex_color: str, amount: float) -> str:
     return f"#{red:02X}{green:02X}{blue:02X}"
 
 
-def _status_colors(selected_party: str) -> dict[str, str]:
+def _category_colors(selected_party: str) -> dict[str, str]:
     party_color = _party_color(selected_party)
     return {
-        "Strong": party_color,
-        "เฝ้าระวัง": _lighten_hex(party_color, 0.35),
-        "เสี่ยง": _lighten_hex(party_color, 0.62),
-        "แพ้สูสี": "#F6C453",
-        "แพ้ห่าง": "#F97316",
-        "ตามไกล": "#6B7280",
-        "ไม่มีข้อมูล": "#E5E7EB",
+        "แข็งแกร่ง": "#60d274",
+        "เฝ้าระวัง": "#ca8a04",
+        "แพ้สูสี": "#ea580c",
+        "แพ้ขาด": "#b91c1c", 
     }
 
 
@@ -310,17 +304,36 @@ def _classify_margin(won: bool, gap_share: float) -> str:
     gap_percent = gap_share * 100
 
     if won:
-        if gap_percent <= 10:
-            return "เสี่ยง"
-        if gap_percent <= 25:
+        if gap_percent <= 15:
             return "เฝ้าระวัง"
-        return "Strong"
+        return "แข็งแกร่ง"
 
-    if gap_percent <= 10:
+    if gap_percent <= 15:
         return "แพ้สูสี"
-    if gap_percent <= 25:
-        return "แพ้ห่าง"
-    return "ตามไกล"
+    return "แพ้ขาด"
+
+
+def _map_color_key(row: pd.Series) -> str:
+    if row["ผลลัพธ์"] == "ชนะ":
+        return f"ชนะ:{row['หมวดหมู่']}"
+    return f"แพ้:{row['พรรคที่ชนะ']}"
+
+
+def _map_color_map(stronghold_df: pd.DataFrame, selected_party: str) -> dict[str, str]:
+    color_map = {
+        "ชนะ:แข็งแกร่ง": _party_color(selected_party),
+        "ชนะ:เฝ้าระวัง": _lighten_hex(_party_color(selected_party), 0.45),
+    }
+
+    losing_winners = (
+        stronghold_df.loc[stronghold_df["ผลลัพธ์"] == "แพ้", "พรรคที่ชนะ"]
+        .dropna()
+        .unique()
+        .tolist()
+    )
+    for party in losing_winners:
+        color_map[f"แพ้:{party}"] = _party_color(str(party))
+    return color_map
 
 
 def prepare_stronghold_data(
@@ -408,6 +421,7 @@ def prepare_stronghold_data(
                 "สัดส่วนพรรคที่ชนะ": winner_votes / denominator,
                 "พรรคที่เทียบ": compare_party,
                 "คะแนนพรรคที่เทียบ": int(compare_votes),
+                "สัดส่วนพรรคที่เทียบ": compare_votes / denominator,
                 "รูปแบบส่วนต่าง": comparison_label,
                 "ส่วนต่างคะแนน": int(max(gap_votes, 0)),
                 "ส่วนต่างเปอร์เซ็นต์": gap_share,
@@ -468,28 +482,37 @@ def render_stronghold_section_map(
     if not geojson_data["features"]:
         st.warning("ไม่พบ boundary ใน GeoJSON ที่ตรงกับข้อมูลคะแนน")
         return
+    map_df = stronghold_df.copy()
+    map_df["สีแผนที่"] = map_df.apply(_map_color_key, axis=1)
+    map_color_map = _map_color_map(map_df, selected_party)
 
     fig = px.choropleth_mapbox(
-        stronghold_df,
+        map_df,
         geojson=geojson_data,
         locations="area_key",
         featureidkey="properties.area_key",
-        color="หมวดหมู่",
-        category_orders={"หมวดหมู่": CATEGORY_ORDER},
-        color_discrete_map=_status_colors(selected_party),
-        hover_name="พื้นที่",
+        color="สีแผนที่",
+        color_discrete_map=map_color_map,
+        hover_name=None,
         hover_data={
+            "สีแผนที่": False,
             "area_key": False,
+            "พื้นที่": True,
             "ผลลัพธ์": True,
-            "คะแนนพรรคที่เลือก": ":,",
-            "สัดส่วนพรรคที่เลือก": ":.2%",
-            "พรรคที่ชนะ": True,
-            "สัดส่วนพรรคที่ชนะ": ":.2%",
-            "พรรคที่เทียบ": True,
-            "รูปแบบส่วนต่าง": True,
-            "ส่วนต่างคะแนน": ":,",
+            "หมวดหมู่": True,
             "ส่วนต่างเปอร์เซ็นต์": ":.2%",
-            "บัตรดี": ":,",
+            "พรรคที่เลือก": False,
+            "คะแนนพรรคที่เลือก": False,
+            "สัดส่วนพรรคที่เลือก": False,
+            "พรรคที่ชนะ": False,
+            "คะแนนพรรคที่ชนะ": False,
+            "สัดส่วนพรรคที่ชนะ": False,
+            "พรรคที่เทียบ": False,
+            "คะแนนพรรคที่เทียบ": False,
+            "สัดส่วนพรรคที่เทียบ": False,
+            "รูปแบบส่วนต่าง": False,
+            "ส่วนต่างคะแนน": False,
+            "บัตรดี": False,
         },
         opacity=0.78,
         center=_geojson_center(geojson_data),
@@ -498,7 +521,7 @@ def render_stronghold_section_map(
     )
     fig.update_layout(
         mapbox_style="carto-positron",
-        legend_title_text="สถานะพื้นที่",
+        legend_title_text="สีบนแผนที่",
         margin=dict(l=0, r=0, t=0, b=0),
         font=dict(family="Tahoma, Arial, sans-serif"),
     )
@@ -511,18 +534,16 @@ def _render_summary(stronghold_df: pd.DataFrame, selected_party: str) -> None:
         return
 
     win_df = stronghold_df[stronghold_df["ผลลัพธ์"] == "ชนะ"]
-    close_loss_df = stronghold_df[stronghold_df["หมวดหมู่"] == "แพ้สูสี"]
-    avg_gap = stronghold_df["ส่วนต่างเปอร์เซ็นต์"].mean()
+    lose_df = stronghold_df[stronghold_df["ผลลัพธ์"] == "แพ้"]
     strongest = "-"
     if not win_df.empty:
         row = win_df.sort_values("ส่วนต่างเปอร์เซ็นต์", ascending=False).iloc[0]
         strongest = f"{row['พื้นที่']} ({row['ส่วนต่างเปอร์เซ็นต์']:.1%})"
 
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3 = st.columns(3)
     col1.metric("พื้นที่ทั้งหมด", f"{len(stronghold_df):,}")
-    col2.metric(f"{selected_party} ชนะ", f"{len(win_df):,}")
-    col3.metric("แพ้สูสี", f"{len(close_loss_df):,}")
-    col4.metric("ส่วนต่างเฉลี่ย", f"{avg_gap:.1%}")
+    col2.metric("ชนะ", f"{len(win_df):,}")
+    col3.metric("แพ้", f"{len(lose_df):,}")
     st.caption(f"ฐานเสียงแข็งที่สุดของ {selected_party}: {strongest}")
 
 
@@ -531,12 +552,9 @@ def _styled_table(stronghold_df: pd.DataFrame):
         "พื้นที่",
         "ผลลัพธ์",
         "หมวดหมู่",
-        "คะแนนพรรคที่เลือก",
         "สัดส่วนพรรคที่เลือก",
-        "พรรคที่ชนะ",
         "พรรคที่เทียบ",
-        "รูปแบบส่วนต่าง",
-        "ส่วนต่างคะแนน",
+        "สัดส่วนพรรคที่เทียบ",
         "ส่วนต่างเปอร์เซ็นต์",
         "บัตรดี",
     ]
@@ -544,9 +562,8 @@ def _styled_table(stronghold_df: pd.DataFrame):
         stronghold_df[table_columns]
         .style.format(
             {
-                "คะแนนพรรคที่เลือก": "{:,.0f}",
                 "สัดส่วนพรรคที่เลือก": "{:.2%}",
-                "ส่วนต่างคะแนน": "{:,.0f}",
+                "สัดส่วนพรรคที่เทียบ": "{:.2%}",
                 "ส่วนต่างเปอร์เซ็นต์": "{:.2%}",
                 "บัตรดี": "{:,.0f}",
             }
@@ -563,7 +580,7 @@ def render(
     if partylist_df is None:
         partylist_df = pd.DataFrame()
 
-    controls = st.columns([1.1, 1.1, 1.2, 1.6])
+    controls = st.columns([1.1, 1.1, 1.4])
     result_label = controls[0].radio(
         "ประเภทคะแนน",
         ["ส.ส.เขต", "บัญชีรายชื่อ"],
@@ -590,16 +607,8 @@ def render(
         st.warning("ไม่พบข้อมูลคะแนนสำหรับทำ Stronghold map")
         return
 
-    phase_options = sorted(df["vote_phase"].dropna().unique()) if "vote_phase" in df else []
-    default_phases = ["election_day"] if "election_day" in phase_options else phase_options
-    selected_phases = controls[3].multiselect(
-        "Vote phase",
-        phase_options,
-        default=default_phases,
-        key=f"stronghold_phase_{result_type}",
-    )
-    if selected_phases:
-        df = df[df["vote_phase"].isin(selected_phases)].copy()
+    if "vote_phase" in df.columns and (df["vote_phase"] == "election_day").any():
+        df = df[df["vote_phase"] == "election_day"].copy()
 
     stronghold_df = prepare_stronghold_data(
         df=df,
@@ -629,7 +638,7 @@ def render(
         x="หมวดหมู่",
         y="จำนวนพื้นที่",
         color="หมวดหมู่",
-        color_discrete_map=_status_colors(selected_party),
+        color_discrete_map=_category_colors(selected_party),
         category_orders={"หมวดหมู่": CATEGORY_ORDER},
         text="จำนวนพื้นที่",
         title="จำนวนพื้นที่ตามระดับความแข็งแรง",
