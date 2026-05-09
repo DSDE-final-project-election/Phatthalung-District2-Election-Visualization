@@ -61,7 +61,7 @@ tabs = st.tabs(
         "📊 Overview",
         "🚨 Result",
         "🗺 Map",
-        "🌡 Heatmap",
+        "🗺 Stronghold",
         "🔬 Station Explorer",
         "🗳 Vote Phase",
     ]
@@ -77,7 +77,7 @@ with tabs[2]:
     tab_candidatePartylistCompare.render(filtered_df)
 
 with tabs[3]:
-    tab_strongholdArea.render(filtered_subdistrict_df)
+    tab_strongholdArea.render(filtered_constituency_result_df, filtered_partylist_result_df)
 
 with tabs[4]:
     tab_ballotBehavior.render(filtered_df)
