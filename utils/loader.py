@@ -112,3 +112,18 @@ def load_constituency_results() -> pd.DataFrame:
 @st.cache_data
 def load_partylist_results() -> pd.DataFrame:
     return _load_csv("partylist_with_latlong_minimal.csv", RESULT_BASE_COLUMNS)
+
+
+@st.cache_data
+def load_constituency_grouped_results() -> pd.DataFrame:
+    return _load_csv("constituency_with_latlong_minimal_grouped.csv", RESULT_BASE_COLUMNS)
+
+
+@st.cache_data
+def load_partylist_grouped_results() -> pd.DataFrame:
+    return _load_csv("partylist_with_latlong_minimal_grouped.csv", RESULT_BASE_COLUMNS)
+
+
+@st.cache_data
+def load_previous_66_grouped_results() -> pd.DataFrame:
+    return _load_csv("phatthalung_2_grouped_66.csv", ["district", "subdistrict"])

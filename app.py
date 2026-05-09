@@ -5,9 +5,12 @@ from tabs import tab_ballotBehavior, tab_result , tab_candidatePartylistCompare,
 from utils.loader import (
     load_anomaly_summary,
     load_constituency,
+    load_constituency_grouped_results,
     load_constituency_results,
+    load_partylist_grouped_results,
     load_partylist_results,
     load_phase_summary,
+    load_previous_66_grouped_results,
     load_subdistrict_summary,
 )
 
@@ -16,11 +19,20 @@ st.set_page_config(layout="wide", page_title="Election Analytics")
 constituency_df = load_constituency()
 constituency_result_df = load_constituency_results()
 partylist_result_df = load_partylist_results()
+constituency_grouped_result_df = load_constituency_grouped_results()
+partylist_grouped_result_df = load_partylist_grouped_results()
+previous_66_grouped_df = load_previous_66_grouped_results()
 anomaly_df = load_anomaly_summary()
 subdistrict_df = load_subdistrict_summary()
 phase_df = load_phase_summary()
 
 st.sidebar.title("Election Analytics")
+
+
+def election_day_rows(df: pd.DataFrame) -> pd.DataFrame:
+    if "vote_phase" not in df.columns:
+        return df
+    return df[df["vote_phase"] == "election_day"]
 
 available_districts = pd.concat(
     [
@@ -52,7 +64,12 @@ else:
     filtered_anomaly_df = anomaly_df
     filtered_subdistrict_df = subdistrict_df
 
-station_count = len(filtered_constituency_result_df) or len(filtered_df)
+station_source_df = (
+    filtered_constituency_result_df
+    if not filtered_constituency_result_df.empty
+    else filtered_df
+)
+station_count = len(election_day_rows(station_source_df))
 st.sidebar.metric("Total Stations", station_count)
 st.sidebar.metric("Total Anomalies", len(filtered_anomaly_df))
 
@@ -71,7 +88,13 @@ with tabs[0]:
     tab_districtOverview.render(filtered_df, filtered_anomaly_df)
 
 with tabs[1]:
-    tab_result.render(filtered_constituency_result_df, filtered_partylist_result_df)
+    tab_result.render(
+        constituency_result_df,
+        partylist_result_df,
+        constituency_grouped_result_df,
+        partylist_grouped_result_df,
+        previous_66_grouped_df,
+    )
 
 with tabs[2]:
     tab_candidatePartylistCompare.render(filtered_df)
