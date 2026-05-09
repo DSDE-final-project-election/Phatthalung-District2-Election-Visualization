@@ -1,7 +1,7 @@
 ﻿import pandas as pd
 import streamlit as st
 
-from tabs import tab_anomaly, tab_heatmap, tab_map, tab_overview, tab_station, tab_votephase
+from tabs import tab_ballotBehavior, tab_result , tab_candidatePartylistCompare, tab_districtOverview, tab_strongholdArea
 from utils.loader import (
     load_anomaly_summary,
     load_constituency,
@@ -44,7 +44,7 @@ st.sidebar.metric("Total Anomalies", len(filtered_anomaly_df))
 tabs = st.tabs(
     [
         "📊 Overview",
-        "🚨 Anomaly",
+        "🚨 Result",
         "🗺 Map",
         "🌡 Heatmap",
         "🔬 Station Explorer",
@@ -53,19 +53,16 @@ tabs = st.tabs(
 )
 
 with tabs[0]:
-    tab_overview.render(filtered_df, filtered_anomaly_df)
+    tab_districtOverview.render(filtered_df, filtered_anomaly_df)
 
 with tabs[1]:
-    tab_anomaly.render(filtered_anomaly_df)
+    tab_result.render(filtered_anomaly_df)
 
 with tabs[2]:
-    tab_map.render(filtered_df)
+    tab_candidatePartylistCompare.render(filtered_df)
 
 with tabs[3]:
-    tab_heatmap.render(filtered_subdistrict_df)
+    tab_strongholdArea.render(filtered_subdistrict_df)
 
 with tabs[4]:
-    tab_station.render(filtered_df)
-
-with tabs[5]:
-    tab_votephase.render(phase_df)
+    tab_ballotBehavior.render(filtered_df)
