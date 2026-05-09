@@ -1,4 +1,5 @@
 import copy
+import base64
 import json
 import re
 import unicodedata
@@ -12,6 +13,7 @@ import streamlit as st
 ROOT_DIR = Path(__file__).resolve().parents[1]
 DATA_DIR = ROOT_DIR / "data"
 GEOJSON_DIRS = [DATA_DIR / "jsonGeo", ROOT_DIR / "jsonGeo"]
+MARK_IMAGE_PATH = ROOT_DIR / "assets" / "mark_strong.png"
 
 TARGET_DISTRICTS = [
     "ศรีบรรพต",
@@ -316,7 +318,7 @@ def _classify_margin(won: bool, gap_share: float) -> str:
 def _map_color_key(row: pd.Series) -> str:
     if row["ผลลัพธ์"] == "ชนะ":
         return f"ชนะ:{row['หมวดหมู่']}"
-    return f"แพ้:{row['พรรคที่ชนะ']}"
+    return f"{row['หมวดหมู่']}:{row['พรรคที่ชนะ']}"
 
 
 def _map_color_map(stronghold_df: pd.DataFrame, selected_party: str) -> dict[str, str]:
@@ -325,14 +327,17 @@ def _map_color_map(stronghold_df: pd.DataFrame, selected_party: str) -> dict[str
         "ชนะ:เฝ้าระวัง": _lighten_hex(_party_color(selected_party), 0.45),
     }
 
-    losing_winners = (
-        stronghold_df.loc[stronghold_df["ผลลัพธ์"] == "แพ้", "พรรคที่ชนะ"]
-        .dropna()
-        .unique()
-        .tolist()
-    )
-    for party in losing_winners:
-        color_map[f"แพ้:{party}"] = _party_color(str(party))
+    losing_rows = stronghold_df.loc[
+        stronghold_df["ผลลัพธ์"] == "แพ้", ["หมวดหมู่", "พรรคที่ชนะ"]
+    ].dropna()
+    for _, row in losing_rows.iterrows():
+        category = str(row["หมวดหมู่"])
+        winner_party = str(row["พรรคที่ชนะ"])
+        winner_color = _party_color(winner_party)
+        if category == "แพ้สูสี":
+            color_map[f"{category}:{winner_party}"] = _lighten_hex(winner_color, 0.45)
+        else:
+            color_map[f"{category}:{winner_party}"] = winner_color
     return color_map
 
 
@@ -465,6 +470,109 @@ def _geojson_center(geojson_data: dict) -> dict[str, float]:
     return {"lat": 7.62, "lon": 99.96}
 
 
+@st.cache_data(show_spinner=False)
+def _mark_image_data_url() -> str:
+    if not MARK_IMAGE_PATH.exists():
+        return ""
+
+    image_bytes = MARK_IMAGE_PATH.read_bytes()
+    encoded = base64.b64encode(image_bytes).decode("ascii")
+    return f"data:image/png;base64,{encoded}"
+
+
+def _iter_lng_lat_points(geometry: dict) -> list[tuple[float, float]]:
+    geometry_type = geometry.get("type")
+    coords = geometry.get("coordinates", [])
+    points: list[tuple[float, float]] = []
+
+    if geometry_type == "Polygon":
+        for ring in coords:
+            for point in ring:
+                if len(point) >= 2:
+                    points.append((float(point[0]), float(point[1])))
+    elif geometry_type == "MultiPolygon":
+        for polygon in coords:
+            for ring in polygon:
+                for point in ring:
+                    if len(point) >= 2:
+                        points.append((float(point[0]), float(point[1])))
+
+    return points
+
+
+def _feature_bounds(feature: dict) -> tuple[float, float, float, float] | None:
+    geometry = feature.get("geometry")
+    if not geometry:
+        return None
+
+    points = _iter_lng_lat_points(geometry)
+    if not points:
+        return None
+
+    longitudes = [point[0] for point in points]
+    latitudes = [point[1] for point in points]
+    return (min(longitudes), min(latitudes), max(longitudes), max(latitudes))
+
+
+def _democrat_strong_overlay_layers(map_df: pd.DataFrame, geojson_data: dict) -> list[dict]:
+    image_url = _mark_image_data_url()
+    if not image_url:
+        return []
+
+    target_rows = map_df[
+        (
+            (map_df["พรรคที่เลือก"] == "ประชาธิปัตย์")
+            & (map_df["ผลลัพธ์"] == "ชนะ")
+            & (map_df["หมวดหมู่"] == "แข็งแกร่ง")
+        )
+        | (
+            (map_df["ผลลัพธ์"] == "แพ้")
+            & (map_df["หมวดหมู่"] == "แพ้ขาด")
+            & (map_df["พรรคที่ชนะ"] == "ประชาธิปัตย์")
+        )
+    ]
+    if target_rows.empty:
+        return []
+
+    feature_lookup: dict[str, dict] = {}
+    for feature in geojson_data.get("features", []):
+        area_key = str(feature.get("properties", {}).get("area_key", ""))
+        if area_key:
+            feature_lookup[area_key] = feature
+
+    layers = []
+    for area_key in target_rows["area_key"].dropna().tolist():
+        feature = feature_lookup.get(str(area_key))
+        if not feature:
+            continue
+
+        bounds = _feature_bounds(feature)
+        if not bounds:
+            continue
+
+        min_lon, min_lat, max_lon, max_lat = bounds
+        center_lon = (min_lon + max_lon) / 2
+        center_lat = (min_lat + max_lat) / 2
+        half_lon = max((max_lon - min_lon) * 0.18, 0.0045)
+        half_lat = max((max_lat - min_lat) * 0.18, 0.0038)
+        layers.append(
+            {
+                "sourcetype": "image",
+                "source": image_url,
+                "coordinates": [
+                    [center_lon - half_lon, center_lat + half_lat],
+                    [center_lon + half_lon, center_lat + half_lat],
+                    [center_lon + half_lon, center_lat - half_lat],
+                    [center_lon - half_lon, center_lat - half_lat],
+                ],
+                "type": "raster",
+                "opacity": 0.92,
+            }
+        )
+
+    return layers
+
+
 def render_stronghold_section_map(
     stronghold_df: pd.DataFrame,
     area_level: str,
@@ -525,6 +633,9 @@ def render_stronghold_section_map(
         margin=dict(l=0, r=0, t=0, b=0),
         font=dict(family="Tahoma, Arial, sans-serif"),
     )
+    overlay_layers = _democrat_strong_overlay_layers(map_df, geojson_data)
+    if overlay_layers:
+        fig.update_layout(mapbox_layers=overlay_layers)
     fig.update_traces(marker_line_width=1.4, marker_line_color="#FFFFFF")
     st.plotly_chart(fig, use_container_width=True)
 
