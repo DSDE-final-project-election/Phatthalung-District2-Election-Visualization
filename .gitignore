@@ -23,7 +23,9 @@ dist/
 !.env.example
 
 # Data files
-data/*.csv
+# data/*.csv
+!data/candidate_party_mapping.csv
+!data/party_info.csv
 !data/.gitkeep
 
 # Logs

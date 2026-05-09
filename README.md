@@ -31,14 +31,31 @@ Phatthalung-District2-Election-Visualization/
 
 ```text
 data/constituency_clean.csv
-data/anomaly_summary.csv
+data/candidate_party_mapping.csv
+data/party_info.csv
+data/partylist_clean.csv
+data/cross_form_validation.csv
 data/subdistrict_summary.csv
 data/phase_summary.csv
 ```
 
 ถ้ายังไม่มีไฟล์ CSV แอปยังรันได้ แต่ข้อมูลใน dashboard จะว่าง เพราะ `utils/loader.py` เตรียม empty DataFrame ไว้ให้แล้ว
 
+หน้า District Overview ใช้ `constituency_clean.csv` สำหรับคะแนนผู้สมัครและข้อมูลบัตรเลือกตั้ง และใช้ `partylist_clean.csv` สำหรับ winner party-list, top parties, และกราฟคะแนน party-list
+
+ไฟล์ `candidate_party_mapping.csv` ใช้ map ผู้สมัคร สส.เขต กับพรรค โดยเก็บ `candidate_number`, `candidate_display_name`, `party_name`, และ `image_ref` สำหรับใส่ path หรือ URL รูปผู้สมัคร
+
+ไฟล์ `party_info.csv` ใช้เก็บ metadata พรรคสำหรับ party-list เช่น `party_name`, `party_color`, และ `party_image_ref` สำหรับใช้สี/โลโก้ใน dashboard
+
 แนะนำให้ save CSV เป็น encoding แบบ `UTF-8` เพื่อรองรับภาษาไทย
+
+## Theme และฟอนต์
+
+สีหลักของ dashboard อยู่ที่ `utils/theme.py` ในตัวแปร `APP_COLORS` และถูก inject ผ่าน `inject_global_theme()` ใน `app.py`
+
+dashboard ตั้ง font-family เป็น `IBM Plex Sans Thai` ทั้งเว็บแล้ว โดยโหลดผ่าน Google Fonts ใน `utils/theme.py`
+
+ถ้า font ยังไม่เปลี่ยนหลังแก้โค้ด ให้ hard refresh browser ด้วย `Ctrl + F5` หรือ restart Streamlit หนึ่งรอบ
 
 ## วิธีรันบน Windows PowerShell
 
