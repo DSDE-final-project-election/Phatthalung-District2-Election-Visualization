@@ -61,6 +61,21 @@ PHASE_SUMMARY_COLUMNS = [
     "vote_mismatch",
 ]
 
+RESULT_BASE_COLUMNS = [
+    "district",
+    "subdistrict",
+    "unit_index",
+    "form_type",
+    "vote_phase",
+    "latitude",
+    "longitude",
+    "latlong_location",
+    "ballot_total",
+    "ballot_valid",
+    "ballot_invalid",
+    "ballot_no_vote",
+]
+
 
 def _load_csv(filename: str, columns: list[str]) -> pd.DataFrame:
     try:
@@ -87,3 +102,13 @@ def load_subdistrict_summary() -> pd.DataFrame:
 @st.cache_data
 def load_phase_summary() -> pd.DataFrame:
     return _load_csv("phase_summary.csv", PHASE_SUMMARY_COLUMNS)
+
+
+@st.cache_data
+def load_constituency_results() -> pd.DataFrame:
+    return _load_csv("constituency_with_latlong_minimal.csv", RESULT_BASE_COLUMNS)
+
+
+@st.cache_data
+def load_partylist_results() -> pd.DataFrame:
+    return _load_csv("partylist_with_latlong_minimal.csv", RESULT_BASE_COLUMNS)

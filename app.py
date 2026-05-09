@@ -5,6 +5,8 @@ from tabs import tab_ballotBehavior, tab_result , tab_candidatePartylistCompare,
 from utils.loader import (
     load_anomaly_summary,
     load_constituency,
+    load_constituency_results,
+    load_partylist_results,
     load_phase_summary,
     load_subdistrict_summary,
 )
@@ -12,6 +14,8 @@ from utils.loader import (
 st.set_page_config(layout="wide", page_title="Election Analytics")
 
 constituency_df = load_constituency()
+constituency_result_df = load_constituency_results()
+partylist_result_df = load_partylist_results()
 anomaly_df = load_anomaly_summary()
 subdistrict_df = load_subdistrict_summary()
 phase_df = load_phase_summary()
@@ -21,6 +25,8 @@ st.sidebar.title("Election Analytics")
 available_districts = pd.concat(
     [
         constituency_df.get("district", pd.Series(dtype="object")),
+        constituency_result_df.get("district", pd.Series(dtype="object")),
+        partylist_result_df.get("district", pd.Series(dtype="object")),
         anomaly_df.get("district", pd.Series(dtype="object")),
         subdistrict_df.get("district", pd.Series(dtype="object")),
     ],
@@ -31,14 +37,23 @@ selected_district = st.sidebar.selectbox("District", ["All"] + district_options)
 
 if selected_district != "All":
     filtered_df = constituency_df[constituency_df["district"] == selected_district]
+    filtered_constituency_result_df = constituency_result_df[
+        constituency_result_df["district"] == selected_district
+    ]
+    filtered_partylist_result_df = partylist_result_df[
+        partylist_result_df["district"] == selected_district
+    ]
     filtered_anomaly_df = anomaly_df[anomaly_df["district"] == selected_district]
     filtered_subdistrict_df = subdistrict_df[subdistrict_df["district"] == selected_district]
 else:
     filtered_df = constituency_df
+    filtered_constituency_result_df = constituency_result_df
+    filtered_partylist_result_df = partylist_result_df
     filtered_anomaly_df = anomaly_df
     filtered_subdistrict_df = subdistrict_df
 
-st.sidebar.metric("Total Stations", len(filtered_df))
+station_count = len(filtered_constituency_result_df) or len(filtered_df)
+st.sidebar.metric("Total Stations", station_count)
 st.sidebar.metric("Total Anomalies", len(filtered_anomaly_df))
 
 tabs = st.tabs(
@@ -56,7 +71,7 @@ with tabs[0]:
     tab_districtOverview.render(filtered_df, filtered_anomaly_df)
 
 with tabs[1]:
-    tab_result.render(filtered_anomaly_df)
+    tab_result.render(filtered_constituency_result_df, filtered_partylist_result_df)
 
 with tabs[2]:
     tab_candidatePartylistCompare.render(filtered_df)
