@@ -2,6 +2,8 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
+from utils.result_maps import render_result_map_sections
+
 
 BASE_COLUMNS = {
     "district",
@@ -17,6 +19,179 @@ BASE_COLUMNS = {
     "ballot_invalid",
     "ballot_no_vote",
 }
+
+PARTY_COLORS = {
+    "พรรคกล้า": "#003E72",
+    "พรรคกล้าธรรม": "#4dc26d",
+    "พรรคก้าวไกล": "#EF771E",
+    "ก้าวไกล": "#EF771E",
+    "พรรคความหวังใหม่": "#FFF04F",
+    "พรรคคอมมิวนิสต์แห่งประเทศไทย": "#FF0000",
+    "พรรคชาติไทยพัฒนา": "#E90080",
+    "พรรคชาติไทย": "#E90080",
+    "พรรคชาติพัฒนากล้า": "#FFA500",
+    "ชาติพัฒนากล้า": "#FFA500",
+    "ชาติพัฒนาเพื่อแผ่นดิน": "#FFAE41",
+    "พรรครวมใจไทยชาติพัฒนา": "#FFAE41",
+    "พรรครวมชาติพัฒนา": "#FFAE41",
+    "พรรคท้องที่ไทย": "#008C45",
+    "พรรคไทยภักดี": "#006400",
+    "พรรคไทยก้าวใหม่": "#FEFF00",
+    "พรรคไทยสร้างไทย": "#6841D0",
+    "พรรคไทยรักไทย": "#E30613",
+    "พรรคไทยรักษาชาติ": "#2D308F",
+    "พรรคไทยทรพย์ทวี": "#6816a4",
+    "พรรคประชากรไทย": "#00CED1",
+    "พรรคประชาชน": "#FF6413",
+    "ประชาชน": "#FF6413",
+    "พรรคประชาชาติ": "#BA810D",
+    "พรรคประชาธิปไตยใหม่": "#EF5E17",
+    "พรรคประชาธิปัตย์": "#15A5F5",
+    "พรรคเป็นธรรม": "#0C4CA3",
+    "พรรคเปลี่ยน": "#BD1F2E",
+    "พรรคเพื่อไทย": "#E30613",
+    "พรรคพลังประชาชน": "#FE4E01",
+    "พรรคพลังประชารัฐ": "#006536",
+    "พรรคพลังบูรพา": "#00FFFF",
+    "พรรคพลังชล": "#00FFFF",
+    "พรรคพลังท้องถิ่นไท": "#32CD32",
+    "พรรคพลังธรรมใหม่": "#175294",
+    "พรรคพลังธรรม": "#175294",
+    "พรรคพลังสังคมใหม่": "#A91B35",
+    "พรรคภูมิใจไทย": "#312682",
+    "พรรครวมไทยสร้างชาติ": "#121F91",
+    "พรรครวมพลังประชาชาติไทย": "#A611E1",
+    "พรรครวมพลัง": "#A611E1",
+    "พรรคแรงงานสร้างชาติ": "#995CE2",
+    "พรรครักษ์ผืนป่าประเทศไทย": "#8CC63F",
+    "พรรครักษ์ผืนป่า": "#8CC63F",
+    "พรรคเศรษฐกิจไทย": "#4EC86F",
+    "พรรคเศรษฐกิจ": "#FEBD00",
+    "พรรคเศรษฐกิจใหม่": "#7B00FF",
+    "พรรคเสรีรวมไทย": "#D8B720",
+    "พรรคอนาคตใหม่": "#F57A36",
+    "พรรคโอกาสไทย": "#8B5BFD",
+    "พรรคพลวัต" : "#56bd36",
+    "อื่นๆ" : "#ADB5BD",
+    "อื่น ๆ": "#ADB5BD",
+}
+
+FALLBACK_COLORS = [
+    "#4E79A7",
+    "#F28E2B",
+    "#E15759",
+    "#76B7B2",
+    "#59A14F",
+    "#EDC948",
+    "#B07AA1",
+    "#FF9DA7",
+    "#9C755F",
+    "#BAB0AC",
+    "#1F77B4",
+    "#FF7F0E",
+    "#2CA02C",
+    "#D62728",
+    "#9467BD",
+    "#8C564B",
+    "#E377C2",
+    "#7F7F7F",
+    "#BCBD22",
+    "#17BECF",
+]
+
+CANDIDATE_PARTY_MAP = {
+    "วรท เทอดวีระพงศ์": "ภูมิใจไทย",
+    "ศุภกร ขุนชิต": "ประชาชน",
+    "พ.ต.อ.พงศ์พสิษฐ์ ทองด้วง": "กล้าธรรม",
+    "อธิคม ขุนแก้ว": "ไทยก้าวใหม่",
+    "ภพเอกอัคร อินทรโม": "ประชาธิปัตย์",
+    "สมเสริม ชูรักษ์": "พลวัต",
+    "นิติศักดิ์ ธรรมเพชร": "เพื่อไทย",
+}
+
+VOTE_PHASE_LABELS = {
+    "election_day": "election_day",
+    "out_of_district_advance": "out_of_district_advance",
+    "in_district_advance": "in_district_advance",
+}
+
+
+def _normalize_party_name(value: str) -> str:
+    """Normalize party labels for color matching."""
+    text = str(value).strip()
+    if text.startswith("พรรค"):
+        text = text[len("พรรค") :]
+    return "".join(text.split())
+
+
+PARTY_COLOR_LOOKUP = {}
+for _party_name, _party_color in PARTY_COLORS.items():
+    PARTY_COLOR_LOOKUP[_normalize_party_name(_party_name)] = _party_color
+
+
+def _party_color(value: str) -> str | None:
+    """Resolve a party color from a party label with or without พรรค prefix."""
+    return PARTY_COLOR_LOOKUP.get(_normalize_party_name(value))
+
+
+def _entity_color_map(entities: list[str], result_type: str) -> dict[str, str]:
+    """Build a Plotly color map for parties or candidate party affiliations."""
+    color_map = {}
+    fallback_index = 0
+    for entity in entities:
+        color = None
+        if result_type == "partylist":
+            color = _party_color(entity)
+        else:
+            party_name = CANDIDATE_PARTY_MAP.get(entity)
+            if party_name:
+                color = _party_color(party_name)
+        if not color and entity != "อื่น ๆ":
+            color = FALLBACK_COLORS[fallback_index % len(FALLBACK_COLORS)]
+            fallback_index += 1
+        if color:
+            color_map[str(entity)] = color
+            color_map[_entity_display_label(entity, result_type)] = color
+    color_map["อื่น ๆ"] = PARTY_COLORS["อื่น ๆ"]
+    return color_map
+
+
+def _entity_display_label(entity: str, result_type: str) -> str:
+    """Display candidate-party mapping when viewing constituency results."""
+    if entity == "อื่น ๆ":
+        return entity
+    if result_type == "constituency":
+        party_name = CANDIDATE_PARTY_MAP.get(entity)
+        if party_name:
+            return f"{entity} ({party_name})"
+    return str(entity)
+
+
+def _phase_label(value: object) -> str:
+    """Return a Thai label for a vote phase."""
+    if pd.isna(value):
+        return "ไม่ระบุประเภทการลงคะแนน"
+    return VOTE_PHASE_LABELS.get(str(value), str(value))
+
+
+def _clean_area_value(value: object) -> str | None:
+    """Return a usable area value, or None for missing placeholders."""
+    if pd.isna(value):
+        return None
+    text = str(value).strip()
+    missing_values = {
+        "",
+        "nan",
+        "none",
+        "null",
+        "ไม่ระบุ",
+        "ไม่ระบุอำเภอ",
+        "ไม่ระบุตำบล",
+        "ไม่ระบุหน่วย",
+    }
+    if text.lower() in missing_values:
+        return None
+    return text
 
 
 def _score_columns(df: pd.DataFrame) -> list[str]:
@@ -57,13 +232,25 @@ def _selected_score_columns(
 
 def _area_label(df: pd.DataFrame) -> pd.Series:
     """Build a readable district/subdistrict label."""
-    if df["district"].dropna().nunique() <= 1:
-        return df["subdistrict"].fillna("ไม่ระบุ")
-    return (
-        df["district"].fillna("ไม่ระบุอำเภอ")
-        + " / "
-        + df["subdistrict"].fillna("ไม่ระบุตำบล")
-    )
+    clean_districts = df["district"].map(_clean_area_value)
+    one_district = clean_districts.dropna().nunique() <= 1
+
+    def build_label(row: pd.Series) -> str:
+        district = _clean_area_value(row.get("district"))
+        subdistrict = _clean_area_value(row.get("subdistrict"))
+        phase = _phase_label(row.get("vote_phase"))
+
+        if not district and not subdistrict:
+            return phase
+        if one_district:
+            return subdistrict or phase
+        if district and subdistrict:
+            return f"{district} / {subdistrict}"
+        if district:
+            return f"{district} / {phase}"
+        return subdistrict or phase
+
+    return df.apply(build_label, axis=1)
 
 
 def _prepare_subdistrict_share(
@@ -138,7 +325,11 @@ def _subdistrict_ranking(df: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
     )
 
 
-def _station_winners(df: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
+def _station_winners(
+    df: pd.DataFrame,
+    columns: list[str],
+    result_type: str,
+) -> pd.DataFrame:
     """Build station-level winner data for the map."""
     if df.empty or not columns:
         return pd.DataFrame()
@@ -149,6 +340,9 @@ def _station_winners(df: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
 
     scores = _numeric_scores(station_df, columns)
     station_df["winner"] = scores.idxmax(axis=1)
+    station_df["winner_display"] = station_df["winner"].map(
+        lambda value: _entity_display_label(value, result_type)
+    )
     station_df["winner_votes"] = scores.max(axis=1).astype(int)
     valid = pd.to_numeric(station_df["ballot_valid"], errors="coerce").fillna(0)
     station_df["winner_share"] = (station_df["winner_votes"] / valid.replace(0, pd.NA)).fillna(0)
@@ -192,18 +386,20 @@ def _render_insight_cards(
             f"{closest['พื้นที่']} ({closest['ส่วนต่างสัดส่วน']:.1%})"
         )
 
-    col1, col2, col3 = st.columns(3)
+    col1, col2 = st.columns(2)
     col1.metric(f"{entity_label}นำ", winner, f"{winner_votes:,.0f} votes")
     col2.metric("สัดส่วนคะแนนนำ", f"{winner_share:.2%}")
-    col3.metric("พื้นที่สูสีที่สุด", closest_text)
     st.caption(f"ฐานเสียงเด่นของ {winner}: {strongest_text}")
 
 
 def render(
     constituency_df: pd.DataFrame,
     partylist_df: pd.DataFrame,
+    constituency_grouped_df: pd.DataFrame | None = None,
+    partylist_grouped_df: pd.DataFrame | None = None,
+    previous_66_df: pd.DataFrame | None = None,
 ) -> None:
-    """Render constituency and party-list result analytics in one tab."""
+    """Render map-focused constituency and party-list result analytics."""
     st.subheader("Election Results")
 
     result_label = st.radio(
@@ -213,208 +409,31 @@ def render(
         key="result_type_toggle",
     )
     is_partylist = result_label == "บัญชีรายชื่อ"
-    df = partylist_df.copy() if is_partylist else constituency_df.copy()
     result_type = "partylist" if is_partylist else "constituency"
-    entity_label = "พรรค" if is_partylist else "ผู้สมัคร"
 
-    if df.empty:
+    current_raw_df = partylist_df.copy() if is_partylist else constituency_df.copy()
+    current_grouped_df = (
+        partylist_grouped_df.copy()
+        if is_partylist and partylist_grouped_df is not None
+        else constituency_grouped_df.copy()
+        if not is_partylist and constituency_grouped_df is not None
+        else pd.DataFrame()
+    )
+    previous_df = previous_66_df.copy() if previous_66_df is not None else pd.DataFrame()
+
+    if current_raw_df.empty and current_grouped_df.empty:
         st.warning("ไม่พบข้อมูลผลเลือกตั้งสำหรับหน้าผลลัพธ์")
         return
 
-    score_cols = _score_columns(df)
-    if not score_cols:
-        st.warning("ไม่พบคอลัมน์คะแนนสำหรับทำกราฟ")
-        return
-
-    filters = st.columns([1.2, 2, 1.4])
-    phase_options = sorted(df["vote_phase"].dropna().unique())
-    default_phases = ["election_day"] if "election_day" in phase_options else phase_options
-    selected_phases = filters[0].multiselect(
-        "Vote phase",
-        phase_options,
-        default=default_phases,
-        key=f"{result_type}_phase_filter",
+    render_result_map_sections(
+        current_raw_df=current_raw_df,
+        current_grouped_df=current_grouped_df,
+        constituency_raw_df=constituency_df,
+        partylist_raw_df=partylist_df,
+        previous_66_df=previous_df,
+        result_type=result_type,
+        base_columns=BASE_COLUMNS,
+        candidate_party_map=CANDIDATE_PARTY_MAP,
+        party_colors=PARTY_COLORS,
+        fallback_colors=FALLBACK_COLORS,
     )
-    if selected_phases:
-        df = df[df["vote_phase"].isin(selected_phases)]
-
-    subdistrict_options = sorted(df["subdistrict"].dropna().unique())
-    selected_subdistricts = filters[1].multiselect(
-        "ตำบล",
-        subdistrict_options,
-        default=[],
-        placeholder="เลือกเฉพาะตำบลที่ต้องการ หรือปล่อยว่างเพื่อดูทั้งหมด",
-        key=f"{result_type}_subdistrict_filter",
-    )
-    if selected_subdistricts:
-        df = df[df["subdistrict"].isin(selected_subdistricts)]
-
-    party_display_mode = "ทุกพรรค"
-    if is_partylist:
-        party_display_mode = filters[2].radio(
-            "แสดงพรรค",
-            ["Top 5", "Top 10", "ซ่อนพรรคคะแนน 0", "ทุกพรรค"],
-            horizontal=False,
-            key="party_display_mode",
-        )
-    else:
-        filters[2].write("")
-        filters[2].caption("ส.ส.เขตแสดงผู้สมัครทุกคนที่มีคะแนน")
-
-    if df.empty:
-        st.info("ไม่มีข้อมูลหลังจาก filter")
-        return
-
-    totals = _entity_totals(df, score_cols)
-    selected_score_cols, include_other = _selected_score_columns(
-        totals,
-        result_type,
-        party_display_mode,
-    )
-    if not selected_score_cols:
-        st.info("ไม่มีคะแนนที่แสดงได้หลังจาก filter")
-        return
-
-    _render_insight_cards(df, score_cols, entity_label)
-
-    total_votes_df = (
-        totals.loc[selected_score_cols]
-        .reset_index()
-        .rename(columns={"index": entity_label, 0: "คะแนน"})
-    )
-
-    fig_total = px.bar(
-        total_votes_df,
-        x="คะแนน",
-        y=entity_label,
-        orientation="h",
-        text="คะแนน",
-        title=f"คะแนนรวม{entity_label}",
-    )
-    fig_total.update_traces(texttemplate="%{text:,.0f}", textposition="outside")
-    fig_total.update_layout(
-        height=max(360, 26 * len(total_votes_df)),
-        margin=dict(l=20, r=20, t=60, b=20),
-        yaxis=dict(categoryorder="total ascending"),
-        font=dict(family="Tahoma, Arial, sans-serif"),
-    )
-    st.plotly_chart(fig_total, use_container_width=True)
-
-    share_df = _prepare_subdistrict_share(
-        df,
-        score_cols,
-        selected_score_cols,
-        include_other,
-    )
-
-    if not share_df.empty:
-        share_long = share_df.melt(
-            id_vars="area_label",
-            var_name=entity_label,
-            value_name="vote_share",
-        )
-        fig_stack = px.bar(
-            share_long,
-            x="area_label",
-            y="vote_share",
-            color=entity_label,
-            title=f"สัดส่วนคะแนน {entity_label} แยกตามตำบล",
-            labels={"area_label": "พื้นที่", "vote_share": "สัดส่วนคะแนน"},
-        )
-        fig_stack.update_layout(
-            barmode="stack",
-            yaxis_tickformat=".0%",
-            height=520,
-            margin=dict(l=20, r=20, t=60, b=120),
-            xaxis_tickangle=-35,
-            font=dict(family="Tahoma, Arial, sans-serif"),
-        )
-        st.plotly_chart(fig_stack, use_container_width=True)
-
-    col_table, col_heatmap = st.columns([1.05, 1])
-
-    with col_table:
-        st.markdown("**Ranking รายตำบล**")
-        ranking = _subdistrict_ranking(df, score_cols)
-        if ranking.empty:
-            st.info("ไม่มีข้อมูล ranking")
-        else:
-            st.dataframe(
-                _format_percent_column(
-                    ranking,
-                    "สัดส่วนอันดับ 1",
-                ),
-                use_container_width=True,
-                hide_index=True,
-            )
-
-    with col_heatmap:
-        st.markdown("**Heatmap สัดส่วนคะแนน**")
-        if share_df.empty:
-            st.info("ไม่มีข้อมูล heatmap")
-        else:
-            heatmap = share_df.set_index("area_label")
-            fig_heatmap = px.imshow(
-                heatmap,
-                aspect="auto",
-                color_continuous_scale="Blues",
-                labels=dict(x=entity_label, y="พื้นที่", color="Vote share"),
-            )
-            fig_heatmap.update_layout(
-                height=max(360, 24 * len(heatmap)),
-                margin=dict(l=10, r=10, t=20, b=80),
-                xaxis_tickangle=-35,
-                font=dict(family="Tahoma, Arial, sans-serif"),
-            )
-            st.plotly_chart(fig_heatmap, use_container_width=True)
-
-    st.markdown("**Map / หน่วยเลือกตั้งที่ผู้ชนะรายหน่วย**")
-    station_map_df = _station_winners(df, score_cols)
-    if station_map_df.empty:
-        st.info("ไม่มีพิกัดสำหรับแสดงแผนที่")
-    else:
-        fig_map = px.scatter_mapbox(
-            station_map_df,
-            lat="latitude",
-            lon="longitude",
-            color="winner",
-            size="ballot_valid",
-            hover_name="latlong_location",
-            hover_data={
-                "district": True,
-                "subdistrict": True,
-                "unit_index": True,
-                "winner_votes": ":,",
-                "winner_share": ":.2%",
-                "latitude": False,
-                "longitude": False,
-            },
-            zoom=8.5,
-            height=560,
-        )
-        fig_map.update_layout(
-            mapbox_style="open-street-map",
-            margin=dict(l=0, r=0, t=0, b=0),
-            font=dict(family="Tahoma, Arial, sans-serif"),
-        )
-        st.plotly_chart(fig_map, use_container_width=True)
-
-    with st.expander("ดูข้อมูลที่ใช้ทำกราฟ"):
-        preview_cols = [
-            "district",
-            "subdistrict",
-            "unit_index",
-            "form_type",
-            "vote_phase",
-            "latitude",
-            "longitude",
-            "latlong_location",
-            "ballot_total",
-            "ballot_valid",
-            *selected_score_cols,
-        ]
-        st.dataframe(
-            df[[column for column in preview_cols if column in df.columns]],
-            use_container_width=True,
-            hide_index=True,
-        )
