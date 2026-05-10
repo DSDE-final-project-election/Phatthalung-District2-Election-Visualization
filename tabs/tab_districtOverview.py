@@ -11,7 +11,7 @@ import streamlit.components.v1 as components
 
 
 DATA_DIR = Path(__file__).resolve().parents[1] / "data"
-ALL_DISTRICTS_LABEL = "All"
+ALL_DISTRICTS_LABEL = "ทั้งหมด"
 NO_DATA_LABEL = "ไม่มีข้อมูล"
 ALL_FILTER_LABEL = "ทั้งหมด"
 VOTE_DAY_LABEL = "วันเลือกตั้ง"
@@ -74,7 +74,12 @@ NON_VOTE_COLUMNS = {
 
 
 @st.cache_data
-def _load_csv_with_fallback(primary_filename: str, fallback_filename: str) -> pd.DataFrame:
+def _load_csv_with_fallback(
+    primary_filename: str,
+    fallback_filename: str,
+    primary_version: float,
+    fallback_version: float,
+) -> pd.DataFrame:
     primary_path = DATA_DIR / primary_filename
     fallback_path = DATA_DIR / fallback_filename
 
@@ -85,14 +90,22 @@ def _load_csv_with_fallback(primary_filename: str, fallback_filename: str) -> pd
     return pd.DataFrame()
 
 
-@st.cache_data
 def _load_constituency_votes() -> pd.DataFrame:
-    return _load_csv_with_fallback("constituency_clean.csv", "constituency.csv")
+    return _load_csv_with_fallback(
+        "constituency_clean.csv",
+        "constituency.csv",
+        _data_file_version("constituency_clean.csv"),
+        _data_file_version("constituency.csv"),
+    )
 
 
-@st.cache_data
 def _load_partylist_votes() -> pd.DataFrame:
-    return _load_csv_with_fallback("partylist_clean.csv", "partylist.csv")
+    return _load_csv_with_fallback(
+        "partylist_clean.csv",
+        "partylist.csv",
+        _data_file_version("partylist_clean.csv"),
+        _data_file_version("partylist.csv"),
+    )
 
 
 @st.cache_data
@@ -112,7 +125,7 @@ def _load_party_info(file_version: float) -> pd.DataFrame:
 
 
 @st.cache_data
-def _load_constituency_quality() -> pd.DataFrame:
+def _load_constituency_quality(file_version: float) -> pd.DataFrame:
     quality_path = DATA_DIR / "constituency_clean.csv"
     if quality_path.exists():
         return pd.read_csv(quality_path)
@@ -1331,7 +1344,7 @@ def render(
         selected_phase,
         selected_subdistrict,
     )
-    quality_source_df = _load_constituency_quality()
+    quality_source_df = _load_constituency_quality(_data_file_version("constituency_clean.csv"))
     if quality_source_df.empty:
         quality_source_df = df
     elif selected_sidebar_district != ALL_DISTRICTS_LABEL and "district" in quality_source_df.columns:
