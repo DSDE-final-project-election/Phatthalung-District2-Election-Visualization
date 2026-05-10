@@ -24,6 +24,7 @@ PARTY_COLORS = {
     "พรรคกล้า": "#003E72",
     "พรรคกล้าธรรม": "#4dc26d",
     "พรรคก้าวไกล": "#EF771E",
+    "ก้าวไกล": "#EF771E",
     "พรรคความหวังใหม่": "#FFF04F",
     "พรรคคอมมิวนิสต์แห่งประเทศไทย": "#FF0000",
     "พรรคชาติไทยพัฒนา": "#E90080",
@@ -42,6 +43,7 @@ PARTY_COLORS = {
     "พรรคไทยทรพย์ทวี": "#6816a4",
     "พรรคประชากรไทย": "#00CED1",
     "พรรคประชาชน": "#FF6413",
+    "ประชาชน": "#FF6413",
     "พรรคประชาชาติ": "#BA810D",
     "พรรคประชาธิปไตยใหม่": "#EF5E17",
     "พรรคประชาธิปัตย์": "#15A5F5",
@@ -108,9 +110,9 @@ CANDIDATE_PARTY_MAP = {
 }
 
 VOTE_PHASE_LABELS = {
-    "election_day": "วันเลือกตั้ง",
-    "out_of_district_advance": "เลือกตั้งล่วงหน้านอกเขต",
-    "in_district_advance": "เลือกตั้งล่วงหน้าในเขต",
+    "election_day": "election_day",
+    "out_of_district_advance": "out_of_district_advance",
+    "in_district_advance": "in_district_advance",
 }
 
 

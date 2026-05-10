@@ -127,9 +127,9 @@ district_options = sorted(available_districts.unique())
 selected_district = st.sidebar.selectbox("District", ["All"] + district_options)
 
 if selected_district != "All":
-    filtered_df = constituency_df[constituency_df["district"] == selected_district]
-    filtered_anomaly_df = anomaly_df[anomaly_df["district"] == selected_district]
-    filtered_subdistrict_df = subdistrict_df[subdistrict_df["district"] == selected_district]
+    filtered_df = constituency_df[constituency_df["district"].astype(str) == selected_district]
+    filtered_anomaly_df = anomaly_df[anomaly_df["district"].astype(str) == selected_district]
+    filtered_subdistrict_df = subdistrict_df[subdistrict_df["district"].astype(str) == selected_district]
 else:
     filtered_df = constituency_df
     filtered_constituency_result_df = constituency_result_df
@@ -137,7 +137,7 @@ else:
     filtered_anomaly_df = anomaly_df
     filtered_subdistrict_df = subdistrict_df
 
-st.sidebar.metric("Total Stations", len(filtered_df))
+st.sidebar.metric("Total Stations", _station_count(filtered_df))
 st.sidebar.metric("Total Anomalies", len(filtered_anomaly_df))
 
 tabs = st.tabs(

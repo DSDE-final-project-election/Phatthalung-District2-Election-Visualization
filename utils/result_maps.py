@@ -120,7 +120,15 @@ def party_key(value: object) -> str:
 def party_color(value: object, party_colors: dict[str, str]) -> str | None:
     """Resolve a stable party color from labels with or without พรรค prefix."""
     party = party_key(value)
-    return party_colors.get(party) or party_colors.get(f"พรรค{party}")
+    hardcoded_fallbacks = {
+        "ก้าวไกล": "#EF771E",
+        "ประชาชน": "#FF6413",
+    }
+    return (
+        party_colors.get(party)
+        or party_colors.get(f"พรรค{party}")
+        or hardcoded_fallbacks.get(party)
+    )
 
 
 def party_color_map(
@@ -732,6 +740,11 @@ def comparison_badge(
     return "เท่ากับปีที่แล้ว", "#F3F4F6", "#374151"
 
 
+def phase_label(value: object) -> str:
+    """Return a display label for a vote phase value."""
+    return VOTE_PHASE_LABELS.get(str(value), str(value))
+
+
 def render_overall_card(
     label: str,
     summary: dict[str, object],
@@ -747,7 +760,7 @@ def render_overall_card(
     color = party_color(winner_party, party_colors) or "#111827"
     winner_asset = str(summary.get("winner_image") or party_logo_url(winner_party) or "")
     winner_image_style = (
-        "width:82px;height:96px;object-fit:cover;border-radius:12px;flex:0 0 82px;"
+        "width:82px;height:96px;object-fit:cover;border-radius:8px;flex:0 0 82px;"
         if is_constituency
         else "width:72px;height:72px;object-fit:contain;flex:0 0 72px;"
     )
@@ -769,7 +782,7 @@ def render_overall_card(
         runner_asset = str(summary.get("runner_up_image") or party_logo_url(runner_up_party) or "")
         runner_image_html = (
             f'<img src="{html.escape(runner_asset)}" '
-            'style="width:42px;height:42px;object-fit:cover;border-radius:9px;flex:0 0 42px;">'
+            'style="width:42px;height:42px;object-fit:cover;border-radius:8px;flex:0 0 42px;">'
             if runner_asset
             else ""
         )
@@ -777,55 +790,78 @@ def render_overall_card(
         if runner_up_party:
             runner_meta_bits.append(html.escape(runner_up_party))
         runner_meta = " | ".join(runner_meta_bits)
-        runner_up_html = f"""
-        <div style="display:flex;align-items:center;gap:10px;margin:12px 0 2px 0;">
-            <div style="font-size:13px;font-weight:900;color:#374151;min-width:54px;">อันดับ 2</div>
-            {runner_image_html}
-            <div>
-                <div style="font-size:15px;font-weight:850;color:#111827;line-height:1.2;">
-                    {html.escape(runner_up_display)}
-                </div>
-                <div style="font-size:13px;color:#6B7280;line-height:1.25;">
-                    {runner_meta} | คะแนน {summary['runner_up_votes']:,} ({summary['runner_up_share']:.2%})
-                </div>
-            </div>
-        </div>
-        """
+        runner_up_html = (
+            '<div style="display:flex;align-items:center;gap:10px;margin-top:14px;'
+            'padding-top:12px;border-top:1px solid var(--color-border);">'
+            '<div style="font-size:12px;font-weight:900;color:var(--color-accent-dark);'
+            'min-width:54px;text-transform:uppercase;">อันดับ 2</div>'
+            f"{runner_image_html}"
+            "<div>"
+            '<div style="font-size:15px;font-weight:850;color:var(--color-text);line-height:1.2;">'
+            f"{html.escape(runner_up_display)}"
+            "</div>"
+            '<div style="font-size:13px;color:var(--color-text-muted);line-height:1.25;">'
+            f"{runner_meta} | คะแนน {summary['runner_up_votes']:,} ({summary['runner_up_share']:.2%})"
+            "</div>"
+            "</div>"
+            "</div>"
+        )
 
-    runner_up_text = (
-        ""
-        if is_constituency
-        else f"อันดับ 2: {html.escape(runner_up_display)} |"
+    if is_constituency:
+        summary_line = ""
+    else:
+        summary_line = (
+            f"อันดับ 2: {html.escape(runner_up_display)} | "
+        )
+    summary_note_html = (
+        '<div style="color:var(--color-text-muted);font-size:13px;'
+        f'line-height:1.35;margin-top:10px;">{summary_line}</div>'
+        if summary_line
+        else ""
     )
-    st.markdown(
-        f"""
-        <div style="display:flex;align-items:center;gap:16px;margin:4px 0 10px 0;">
-            {logo_html}
-            <div>
-                <div style="font-size:25px;font-weight:800;color:#111827;line-height:1.15;">
-                    {label}
-                </div>
-                <div style="font-size:36px;font-weight:900;color:{color};line-height:1.05;margin-top:2px;">
-                    {html.escape(winner_display)}
-                </div>
-                <div style="font-size:15px;font-weight:800;color:{color};line-height:1.25;margin-top:3px;">
-                    {party_line}
-                </div>
-                <div style="
-                    display:inline-block;margin-top:9px;padding:4px 11px;border-radius:999px;
-                    background:{badge_bg};color:{badge_fg};font-size:15px;font-weight:800;">
-                    {html.escape(badge_text)}
-                </div>
-            </div>
-        </div>
-        {runner_up_html}
-        <div style="color:#6B7280;font-size:14px;margin-top:4px;">
-            {runner_up_text}
-            ส่วนต่าง {summary['margin_votes']:,} ({summary['margin_share']:.2%})
-        </div>
-        """,
-        unsafe_allow_html=True,
+    card_html = (
+        '<div style="position:relative;overflow:hidden;min-height:214px;'
+        'background:var(--color-surface);border:1px solid var(--color-border);'
+        'border-radius:8px;padding:18px 18px 16px 18px;'
+        'box-shadow:0 12px 26px rgba(64,64,65,0.08);">'
+        f'<div style="position:absolute;left:0;top:0;width:100%;height:5px;background:{color};"></div>'
+        '<div style="display:flex;align-items:center;gap:16px;">'
+        '<div style="width:92px;min-width:92px;height:104px;display:flex;align-items:center;'
+        'justify-content:center;background:var(--color-surface-muted);border-radius:8px;'
+        'border:1px solid var(--color-border);overflow:hidden;">'
+        f"{logo_html}"
+        "</div>"
+        '<div style="min-width:0;">'
+        '<div style="display:inline-flex;align-items:center;padding:3px 9px;border-radius:999px;'
+        'background:var(--color-accent-soft);color:var(--color-accent-dark);'
+        'font-size:13px;font-weight:850;line-height:1.2;margin-bottom:8px;">'
+        f"{html.escape(label)}"
+        "</div>"
+        f'<div style="font-size:34px;font-weight:950;color:{color};line-height:1.05;'
+        f'margin-top:0;word-break:break-word;">{html.escape(winner_display)}</div>'
+        '<div style="font-size:15px;font-weight:850;color:var(--color-text);line-height:1.25;margin-top:5px;">'
+        f"{party_line}"
+        "</div>"
+        f'<div style="display:inline-block;margin-top:10px;padding:5px 11px;border-radius:999px;'
+        f'background:{badge_bg};color:{badge_fg};font-size:14px;font-weight:850;">'
+        f"{html.escape(badge_text)}"
+        "</div>"
+        "</div>"
+        "</div>"
+        '<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;'
+        'margin-top:16px;padding-top:14px;border-top:1px solid var(--color-border);">'
+        '<div><div style="font-size:12px;color:var(--color-text-muted);font-weight:700;">คะแนน</div>'
+        f'<div style="font-size:18px;color:var(--color-text);font-weight:900;line-height:1.15;">{summary["winner_votes"]:,}</div></div>'
+        '<div><div style="font-size:12px;color:var(--color-text-muted);font-weight:700;">สัดส่วน</div>'
+        f'<div style="font-size:18px;color:var(--color-text);font-weight:900;line-height:1.15;">{summary["winner_share"]:.2%}</div></div>'
+        '<div><div style="font-size:12px;color:var(--color-text-muted);font-weight:700;">ทิ้งห่าง</div>'
+        f'<div style="font-size:18px;color:var(--color-text);font-weight:900;line-height:1.15;">{summary["margin_votes"]:,}</div></div>'
+        "</div>"
+        f"{runner_up_html}"
+        f"{summary_note_html}"
+        "</div>"
     )
+    st.markdown(card_html, unsafe_allow_html=True)
 
 
 def render_overall_summary(
@@ -852,6 +888,7 @@ def render_overall_summary(
                 comparison_summary,
                 party_colors,
             )
+    st.markdown('<div style="height:22px;"></div>', unsafe_allow_html=True)
 
 
 def station_winners(
@@ -1115,9 +1152,10 @@ def render_result_map_sections(
         )
         default_phases = ["election_day"] if "election_day" in phase_options else phase_options
         selected_phases = st.multiselect(
-            "Vote phase",
+            "ประเภทการลงคะแนน",
             phase_options,
             default=default_phases,
+            format_func=phase_label,
             key=f"result_map_phase_{result_type}_{station_result_type}",
         )
         render_station_map(
@@ -1156,9 +1194,10 @@ def render_result_map_sections(
             ["election_day"] if "election_day" in heatmap_phase_options else heatmap_phase_options
         )
         selected_heatmap_phases = controls[2].multiselect(
-            "Vote phase ใน heatmap",
+            "ประเภทการลงคะแนนใน heatmap",
             heatmap_phase_options,
             default=default_heatmap_phases,
+            format_func=phase_label,
             key=f"result_map_heatmap_phase_{result_type}",
         )
         area_level = "district" if area_label == "อำเภอ" else "subdistrict"
