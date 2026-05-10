@@ -1,7 +1,10 @@
 import copy
 import base64
+import html
 import json
+import math
 import re
+import struct
 import unicodedata
 from pathlib import Path
 
@@ -13,7 +16,12 @@ import streamlit as st
 ROOT_DIR = Path(__file__).resolve().parents[1]
 DATA_DIR = ROOT_DIR / "data"
 GEOJSON_DIRS = [DATA_DIR / "jsonGeo", ROOT_DIR / "jsonGeo"]
+PARTY_INFO_PATH = DATA_DIR / "party_info.csv"
 MARK_IMAGE_PATH = ROOT_DIR / "assets" / "mark_strong.png"
+VAROD_PUNCHED_IMAGE_PATH = ROOT_DIR / "assets" / "varod_punched.png"
+VAROD_SMILE_IMAGE_PATH = ROOT_DIR / "assets" / "varod_smile.png"
+NITISAK_PUNCHED_IMAGE_PATH = ROOT_DIR / "assets" / "nitisak_punched.png"
+NITISAK_SMILE_IMAGE_PATH = ROOT_DIR / "assets" / "nitisak_smile.png"
 
 TARGET_DISTRICTS = [
     "ศรีบรรพต",
@@ -149,7 +157,50 @@ def _numeric_scores(df: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
     return df[columns].apply(pd.to_numeric, errors="coerce").fillna(0)
 
 
+def _normalize_party_name(value: object) -> str:
+    if pd.isna(value):
+        return ""
+    text = unicodedata.normalize("NFC", str(value).strip())
+    text = re.sub(r"\s+", "", text)
+    if text.startswith("พรรค"):
+        text = text.removeprefix("พรรค")
+    return text
+
+
+@st.cache_data(show_spinner=False)
+def load_party_info() -> dict[str, dict[str, str]]:
+    if not PARTY_INFO_PATH.exists():
+        return {}
+
+    try:
+        party_df = pd.read_csv(PARTY_INFO_PATH).fillna("")
+    except (OSError, pd.errors.ParserError):
+        return {}
+
+    info: dict[str, dict[str, str]] = {}
+    for _, row in party_df.iterrows():
+        party_name = str(row.get("party_name", "")).strip()
+        party_key = _normalize_party_name(party_name)
+        if not party_key:
+            continue
+
+        info[party_key] = {
+            "party_name": party_name,
+            "party_color": str(row.get("party_color", "")).strip(),
+            "party_image_ref": str(row.get("party_image_ref", "")).strip(),
+            "pm_candidate_image_ref": str(row.get("pm_candidate_image_ref", "")).strip(),
+        }
+    return info
+
+
+def _party_info(party: str) -> dict[str, str]:
+    return load_party_info().get(_normalize_party_name(party), {})
+
+
 def _party_color(party: str) -> str:
+    info_color = _party_info(party).get("party_color", "")
+    if re.fullmatch(r"#[0-9a-fA-F]{6}", info_color):
+        return info_color.upper()
     return PARTY_COLORS.get(party) or PARTY_COLORS.get(f"พรรค{party}") or "#6B7280"
 
 
@@ -165,10 +216,10 @@ def _lighten_hex(hex_color: str, amount: float) -> str:
 def _category_colors(selected_party: str) -> dict[str, str]:
     party_color = _party_color(selected_party)
     return {
-        "แข็งแกร่ง": "#60d274",
-        "เฝ้าระวัง": "#ca8a04",
-        "แพ้สูสี": "#ea580c",
-        "แพ้ขาด": "#b91c1c", 
+        "แข็งแกร่ง": "#5B7E3C",
+        "เฝ้าระวัง": "#FFD65A",
+        "แพ้สูสี": "#FF9D23",
+        "แพ้ขาด": "#EA5252",
     }
 
 
@@ -480,6 +531,46 @@ def _mark_image_data_url() -> str:
     return f"data:image/png;base64,{encoded}"
 
 
+@st.cache_data(show_spinner=False)
+def _varod_punched_image_data_url() -> str:
+    if not VAROD_PUNCHED_IMAGE_PATH.exists():
+        return ""
+
+    image_bytes = VAROD_PUNCHED_IMAGE_PATH.read_bytes()
+    encoded = base64.b64encode(image_bytes).decode("ascii")
+    return f"data:image/png;base64,{encoded}"
+
+
+@st.cache_data(show_spinner=False)
+def _varod_smile_image_data_url() -> str:
+    if not VAROD_SMILE_IMAGE_PATH.exists():
+        return ""
+
+    image_bytes = VAROD_SMILE_IMAGE_PATH.read_bytes()
+    encoded = base64.b64encode(image_bytes).decode("ascii")
+    return f"data:image/png;base64,{encoded}"
+
+
+@st.cache_data(show_spinner=False)
+def _nitisak_punched_image_data_url() -> str:
+    if not NITISAK_PUNCHED_IMAGE_PATH.exists():
+        return ""
+
+    image_bytes = NITISAK_PUNCHED_IMAGE_PATH.read_bytes()
+    encoded = base64.b64encode(image_bytes).decode("ascii")
+    return f"data:image/png;base64,{encoded}"
+
+
+@st.cache_data(show_spinner=False)
+def _nitisak_smile_image_data_url() -> str:
+    if not NITISAK_SMILE_IMAGE_PATH.exists():
+        return ""
+
+    image_bytes = NITISAK_SMILE_IMAGE_PATH.read_bytes()
+    encoded = base64.b64encode(image_bytes).decode("ascii")
+    return f"data:image/png;base64,{encoded}"
+
+
 def _iter_lng_lat_points(geometry: dict) -> list[tuple[float, float]]:
     geometry_type = geometry.get("type")
     coords = geometry.get("coordinates", [])
@@ -514,25 +605,40 @@ def _feature_bounds(feature: dict) -> tuple[float, float, float, float] | None:
     return (min(longitudes), min(latitudes), max(longitudes), max(latitudes))
 
 
-def _democrat_strong_overlay_layers(map_df: pd.DataFrame, geojson_data: dict) -> list[dict]:
-    image_url = _mark_image_data_url()
-    if not image_url:
+def _png_image_size(path: Path) -> tuple[int, int] | None:
+    if not path.exists():
+        return None
+    raw = path.read_bytes()
+    if len(raw) < 24:
+        return None
+    if raw[:8] != b"\x89PNG\r\n\x1a\n":
+        return None
+    if raw[12:16] != b"IHDR":
+        return None
+    width = struct.unpack(">I", raw[16:20])[0]
+    height = struct.unpack(">I", raw[20:24])[0]
+    if width <= 0 or height <= 0:
+        return None
+    return (width, height)
+
+
+def _make_image_overlay_layers(
+    image_url: str,
+    image_path: Path,
+    target_rows: pd.DataFrame,
+    geojson_data: dict,
+    width_scale: float,
+    min_half_lon: float,
+    opacity: float,
+) -> list[dict]:
+    if not image_url or target_rows.empty:
         return []
 
-    target_rows = map_df[
-        (
-            (map_df["พรรคที่เลือก"] == "ประชาธิปัตย์")
-            & (map_df["ผลลัพธ์"] == "ชนะ")
-            & (map_df["หมวดหมู่"] == "แข็งแกร่ง")
-        )
-        | (
-            (map_df["ผลลัพธ์"] == "แพ้")
-            & (map_df["หมวดหมู่"] == "แพ้ขาด")
-            & (map_df["พรรคที่ชนะ"] == "ประชาธิปัตย์")
-        )
-    ]
-    if target_rows.empty:
+    image_size = _png_image_size(image_path)
+    if not image_size:
         return []
+    image_width, image_height = image_size
+    aspect_h_by_w = image_height / image_width
 
     feature_lookup: dict[str, dict] = {}
     for feature in geojson_data.get("features", []):
@@ -553,8 +659,10 @@ def _democrat_strong_overlay_layers(map_df: pd.DataFrame, geojson_data: dict) ->
         min_lon, min_lat, max_lon, max_lat = bounds
         center_lon = (min_lon + max_lon) / 2
         center_lat = (min_lat + max_lat) / 2
-        half_lon = max((max_lon - min_lon) * 0.18, 0.0045)
-        half_lat = max((max_lat - min_lat) * 0.18, 0.0038)
+        half_lon = max((max_lon - min_lon) * width_scale, min_half_lon)
+        lat_factor = math.cos(math.radians(center_lat))
+        lat_factor = max(lat_factor, 0.2)
+        half_lat = half_lon * lat_factor * aspect_h_by_w
         layers.append(
             {
                 "sourcetype": "image",
@@ -566,11 +674,193 @@ def _democrat_strong_overlay_layers(map_df: pd.DataFrame, geojson_data: dict) ->
                     [center_lon - half_lon, center_lat - half_lat],
                 ],
                 "type": "raster",
-                "opacity": 0.92,
+                "opacity": opacity,
             }
         )
 
     return layers
+
+
+def _democrat_strong_overlay_layers(
+    map_df: pd.DataFrame, geojson_data: dict, area_level: str
+) -> list[dict]:
+    if area_level != "district":
+        return []
+
+    image_url = _mark_image_data_url()
+    if not image_url:
+        return []
+
+    target_rows = map_df[
+        (
+            (map_df["พรรคที่เลือก"] == "ประชาธิปัตย์")
+            & (map_df["ผลลัพธ์"] == "ชนะ")
+            & (map_df["หมวดหมู่"] == "แข็งแกร่ง")
+        )
+        | (
+            (map_df["ผลลัพธ์"] == "แพ้")
+            & (map_df["หมวดหมู่"] == "แพ้ขาด")
+            & (map_df["พรรคที่ชนะ"] == "ประชาธิปัตย์")
+        )
+    ]
+    if target_rows.empty:
+        return []
+
+    return _make_image_overlay_layers(
+        image_url=image_url,
+        image_path=MARK_IMAGE_PATH,
+        target_rows=target_rows,
+        geojson_data=geojson_data,
+        width_scale=0.18,
+        min_half_lon=0.0045,
+        opacity=0.92,
+    )
+
+
+def _bhumjaithai_close_overlay_layers(
+    map_df: pd.DataFrame, geojson_data: dict, area_level: str
+) -> list[dict]:
+    if area_level != "district":
+        return []
+
+    image_url = _varod_punched_image_data_url()
+    if not image_url:
+        return []
+
+    target_rows = map_df[
+        (
+            (map_df["พรรคที่เลือก"] == "ภูมิใจไทย")
+            & (map_df["ผลลัพธ์"] == "ชนะ")
+            & (map_df["หมวดหมู่"] == "เฝ้าระวัง")
+        )
+        | (
+            (map_df["ผลลัพธ์"] == "แพ้")
+            & (map_df["หมวดหมู่"] == "แพ้สูสี")
+            & (map_df["พรรคที่ชนะ"] == "ภูมิใจไทย")
+        )
+    ]
+    if target_rows.empty:
+        return []
+
+    return _make_image_overlay_layers(
+        image_url=image_url,
+        image_path=VAROD_PUNCHED_IMAGE_PATH,
+        target_rows=target_rows,
+        geojson_data=geojson_data,
+        width_scale=0.16,
+        min_half_lon=0.0042,
+        opacity=0.9,
+    )
+
+
+def _varod_smile_overlay_layers(
+    map_df: pd.DataFrame, geojson_data: dict, area_level: str, selected_party: str
+) -> list[dict]:
+    if area_level != "district":
+        return []
+
+    image_url = _varod_smile_image_data_url()
+    if not image_url:
+        return []
+
+    target_rows = map_df[
+        (
+            (selected_party == "ภูมิใจไทย")
+            & (map_df["พรรคที่เลือก"] == "ภูมิใจไทย")
+            & (map_df["ผลลัพธ์"] == "ชนะ")
+            & (map_df["หมวดหมู่"] == "แข็งแกร่ง")
+        )
+        | (
+            (map_df["ผลลัพธ์"] == "แพ้")
+            & (map_df["หมวดหมู่"] == "แพ้ขาด")
+            & (map_df["พรรคที่ชนะ"] == "ภูมิใจไทย")
+        )
+    ]
+    if target_rows.empty:
+        return []
+
+    return _make_image_overlay_layers(
+        image_url=image_url,
+        image_path=VAROD_SMILE_IMAGE_PATH,
+        target_rows=target_rows,
+        geojson_data=geojson_data,
+        width_scale=0.15,
+        min_half_lon=0.004,
+        opacity=0.88,
+    )
+
+
+def _pueathai_close_overlay_layers(
+    map_df: pd.DataFrame, geojson_data: dict, area_level: str
+) -> list[dict]:
+    if area_level != "district":
+        return []
+
+    image_url = _nitisak_punched_image_data_url()
+    if not image_url:
+        return []
+
+    target_rows = map_df[
+        (
+            (map_df["พรรคที่เลือก"] == "เพื่อไทย")
+            & (map_df["ผลลัพธ์"] == "ชนะ")
+            & (map_df["หมวดหมู่"] == "เฝ้าระวัง")
+        )
+        | (
+            (map_df["ผลลัพธ์"] == "แพ้")
+            & (map_df["หมวดหมู่"] == "แพ้สูสี")
+            & (map_df["พรรคที่ชนะ"] == "เพื่อไทย")
+        )
+    ]
+    if target_rows.empty:
+        return []
+
+    return _make_image_overlay_layers(
+        image_url=image_url,
+        image_path=NITISAK_PUNCHED_IMAGE_PATH,
+        target_rows=target_rows,
+        geojson_data=geojson_data,
+        width_scale=0.16,
+        min_half_lon=0.0042,
+        opacity=0.9,
+    )
+
+
+def _pueathai_strong_overlay_layers(
+    map_df: pd.DataFrame, geojson_data: dict, area_level: str, selected_party: str
+) -> list[dict]:
+    if area_level != "district":
+        return []
+
+    image_url = _nitisak_smile_image_data_url()
+    if not image_url:
+        return []
+
+    target_rows = map_df[
+        (
+            (selected_party == "เพื่อไทย")
+            & (map_df["พรรคที่เลือก"] == "เพื่อไทย")
+            & (map_df["ผลลัพธ์"] == "ชนะ")
+            & (map_df["หมวดหมู่"] == "แข็งแกร่ง")
+        )
+        | (
+            (map_df["ผลลัพธ์"] == "แพ้")
+            & (map_df["หมวดหมู่"] == "แพ้ขาด")
+            & (map_df["พรรคที่ชนะ"] == "เพื่อไทย")
+        )
+    ]
+    if target_rows.empty:
+        return []
+
+    return _make_image_overlay_layers(
+        image_url=image_url,
+        image_path=NITISAK_SMILE_IMAGE_PATH,
+        target_rows=target_rows,
+        geojson_data=geojson_data,
+        width_scale=0.15,
+        min_half_lon=0.004,
+        opacity=0.88,
+    )
 
 
 def render_stronghold_section_map(
@@ -633,11 +923,196 @@ def render_stronghold_section_map(
         margin=dict(l=0, r=0, t=0, b=0),
         font=dict(family="Tahoma, Arial, sans-serif"),
     )
-    overlay_layers = _democrat_strong_overlay_layers(map_df, geojson_data)
+    overlay_layers = []
+    overlay_layers.extend(_democrat_strong_overlay_layers(map_df, geojson_data, area_level))
+    overlay_layers.extend(_bhumjaithai_close_overlay_layers(map_df, geojson_data, area_level))
+    overlay_layers.extend(
+        _varod_smile_overlay_layers(map_df, geojson_data, area_level, selected_party)
+    )
+    overlay_layers.extend(_pueathai_close_overlay_layers(map_df, geojson_data, area_level))
+    overlay_layers.extend(
+        _pueathai_strong_overlay_layers(map_df, geojson_data, area_level, selected_party)
+    )
     if overlay_layers:
         fig.update_layout(mapbox_layers=overlay_layers)
     fig.update_traces(marker_line_width=1.4, marker_line_color="#FFFFFF")
     st.plotly_chart(fig, use_container_width=True)
+
+
+def _contrast_text_color(hex_color: str) -> str:
+    raw = hex_color.lstrip("#")
+    if len(raw) != 6:
+        return "#FFFFFF"
+
+    red, green, blue = (int(raw[i : i + 2], 16) for i in (0, 2, 4))
+    luminance = (0.299 * red + 0.587 * green + 0.114 * blue) / 255
+    return "#111827" if luminance > 0.62 else "#FFFFFF"
+
+
+def _image_html(src: str, css_class: str, alt: str) -> str:
+    if not src:
+        return ""
+    return (
+        f'<img class="{css_class}" src="{html.escape(src, quote=True)}" '
+        f'alt="{html.escape(alt, quote=True)}" loading="lazy" />'
+    )
+
+
+def _render_party_brand_panel(selected_party: str, stronghold_df: pd.DataFrame) -> None:
+    party_info = _party_info(selected_party)
+    party_name = party_info.get("party_name") or f"พรรค{selected_party}"
+    party_color = _party_color(selected_party)
+    soft_color = _lighten_hex(party_color, 0.86)
+    text_color = _contrast_text_color(party_color)
+    win_count = int((stronghold_df["ผลลัพธ์"] == "ชนะ").sum())
+    lose_count = int((stronghold_df["ผลลัพธ์"] == "แพ้").sum())
+    total_count = len(stronghold_df)
+    strongest_label = "-"
+
+    win_df = stronghold_df[stronghold_df["ผลลัพธ์"] == "ชนะ"]
+    if not win_df.empty:
+        strongest = win_df.sort_values("ส่วนต่างเปอร์เซ็นต์", ascending=False).iloc[0]
+        strongest_label = f"{strongest['พื้นที่']} ({strongest['ส่วนต่างเปอร์เซ็นต์']:.2%})"
+
+    logo_html = _image_html(
+        party_info.get("party_image_ref", ""),
+        "party-brand-logo",
+        f"{party_name} logo",
+    )
+    candidate_class = "party-brand-candidate"
+    if selected_party != "ประชาชน":
+        candidate_class = "party-brand-candidate party-brand-candidate-fill"
+    candidate_html = _image_html(
+        party_info.get("pm_candidate_image_ref", ""),
+        candidate_class,
+        f"{party_name} candidate",
+    )
+    if not logo_html:
+        logo_html = f'<div class="party-brand-logo-fallback">{html.escape(selected_party[:1])}</div>'
+    if not candidate_html:
+        candidate_html = '<div class="party-brand-candidate-fallback">ไม่มีรูป</div>'
+
+    st.markdown(
+        f"""
+<style>
+.party-brand-panel {{
+    border: 1px solid rgba(17, 24, 39, 0.08);
+    border-left: 8px solid {party_color};
+    border-radius: 8px;
+    background:
+        linear-gradient(115deg, {soft_color} 0%, #ffffff 45%, #f8fafc 100%);
+    padding: 18px 20px;
+    margin: 8px 0 18px;
+    display: grid;
+    grid-template-columns: 92px minmax(0, 1fr) 132px;
+    gap: 18px;
+    align-items: center;
+    box-shadow: 0 8px 22px rgba(15, 23, 42, 0.07);
+}}
+.party-brand-logo,
+.party-brand-logo-fallback {{
+    width: 76px;
+    height: 76px;
+    border-radius: 8px;
+    background: #ffffff;
+    object-fit: contain;
+    padding: 10px;
+    box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.08);
+}}
+.party-brand-logo-fallback {{
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: {party_color};
+    color: {text_color};
+    font-weight: 800;
+    font-size: 30px;
+}}
+.party-brand-title {{
+    color: #111827;
+    font-size: 24px;
+    font-weight: 800;
+    line-height: 1.15;
+    margin-bottom: 8px;
+}}
+.party-brand-meta {{
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    color: #374151;
+    font-size: 14px;
+}}
+.party-brand-chip {{
+    border-radius: 999px;
+    padding: 6px 10px;
+    background: rgba(255, 255, 255, 0.78);
+    border: 1px solid rgba(17, 24, 39, 0.08);
+    white-space: nowrap;
+}}
+.party-brand-color-chip {{
+    background: {party_color};
+    color: {text_color};
+    border-color: transparent;
+    font-weight: 700;
+}}
+.party-brand-candidate,
+.party-brand-candidate-fallback {{
+    justify-self: end;
+    width: 112px;
+    height: 112px;
+    border-radius: 8px;
+    object-fit: cover;
+    background: #ffffff;
+    box-shadow: 0 10px 24px rgba(15, 23, 42, 0.14);
+}}
+.party-brand-candidate-fill {{
+    width: 112px;
+    height: 112px;
+    object-fit: cover;
+    object-position: center center;
+    transform: scale(1.45);
+    transform-origin: center center;
+    clip-path: inset(0 round 8px);
+}}
+.party-brand-candidate-fallback {{
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #6b7280;
+    font-size: 13px;
+}}
+@media (max-width: 720px) {{
+    .party-brand-panel {{
+        grid-template-columns: 72px minmax(0, 1fr);
+    }}
+    .party-brand-candidate,
+    .party-brand-candidate-fallback {{
+        display: none;
+    }}
+    .party-brand-logo,
+    .party-brand-logo-fallback {{
+        width: 64px;
+        height: 64px;
+    }}
+}}
+</style>
+<div class="party-brand-panel">
+    <div>{logo_html}</div>
+    <div>
+        <div class="party-brand-title">{html.escape(party_name)}</div>
+        <div class="party-brand-meta">
+            <span class="party-brand-chip">พื้นที่ {total_count:,}</span>
+            <span class="party-brand-chip">ชนะ {win_count:,}</span>
+            <span class="party-brand-chip">แพ้ {lose_count:,}</span>
+            <span class="party-brand-chip">ฐานเด่น {html.escape(strongest_label)}</span>
+        </div>
+    </div>
+    <div>{candidate_html}</div>
+</div>
+""",
+        unsafe_allow_html=True,
+    )
 
 
 def _render_summary(stronghold_df: pd.DataFrame, selected_party: str) -> None:
@@ -732,7 +1207,7 @@ def render(
         st.info("ไม่มีข้อมูลใน 5 อำเภอเป้าหมายหลังจาก filter")
         return
 
-    _render_summary(stronghold_df, selected_party)
+    _render_party_brand_panel(selected_party, stronghold_df)
     render_stronghold_section_map(stronghold_df, area_level, selected_party)
 
     category_counts = (
