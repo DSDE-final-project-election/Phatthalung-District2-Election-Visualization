@@ -1,4 +1,4 @@
-vote_phase,turnout,invalid_ratio,integrity_score,vote_mismatch
-election_day,0.9598666236270306,0.01963918440621593,81.54190600679024,0.0
-in_district_advance,1.0,0.0,81.03554971212695,0.0
-out_of_district_advance,0.9127705305888799,0.014295506809118999,79.81363903347996,0.0
+﻿vote_phase,turnout,invalid_ratio,integrity_score,vote_mismatch
+election_day,0.959576892631286,0.020189806800685463,98.58584364860515,0
+in_district_advance,1.0,0.0,100.0,0
+out_of_district_advance,0.9127498649378715,0.014451647757968665,97.82144786601837,0

@@ -1,0 +1,13 @@
+﻿dataset,vote_phase,has_latlong,rows
+constituency,election_day,False,4
+constituency,election_day,True,273
+constituency,in_district_advance,False,1
+constituency,out_of_district_advance,False,10
+cross_form,election_day,False,4
+cross_form,election_day,True,273
+cross_form,in_district_advance,False,1
+cross_form,out_of_district_advance,False,10
+partylist,election_day,False,5
+partylist,election_day,True,272
+partylist,in_district_advance,False,1
+partylist,out_of_district_advance,False,10

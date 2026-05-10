@@ -979,9 +979,9 @@ def _render_party_brand_panel(selected_party: str, stronghold_df: pd.DataFrame) 
         "party-brand-logo",
         f"{party_name} logo",
     )
-    candidate_class = "party-brand-candidate"
-    if selected_party != "ประชาชน":
-        candidate_class = "party-brand-candidate party-brand-candidate-fill"
+    candidate_class = "party-brand-candidate party-brand-candidate-fill"
+    if selected_party == "ภูมิใจไทย":
+        candidate_class += " party-brand-candidate-tight"
     candidate_html = _image_html(
         party_info.get("pm_candidate_image_ref", ""),
         candidate_class,
@@ -1056,24 +1056,33 @@ def _render_party_brand_panel(selected_party: str, stronghold_df: pd.DataFrame) 
     border-color: transparent;
     font-weight: 700;
 }}
-.party-brand-candidate,
-.party-brand-candidate-fallback {{
+.party-brand-candidate-frame {{
     justify-self: end;
-    width: 112px;
-    height: 112px;
+    width: 124px;
+    height: 124px;
     border-radius: 8px;
-    object-fit: cover;
+    overflow: hidden;
     background: #ffffff;
+    border: 1px solid rgba(15, 23, 42, 0.08);
     box-shadow: 0 10px 24px rgba(15, 23, 42, 0.14);
 }}
-.party-brand-candidate-fill {{
-    width: 112px;
-    height: 112px;
+.party-brand-candidate,
+.party-brand-candidate-fallback {{
+    width: 100%;
+    height: 100%;
+    border-radius: 0;
     object-fit: cover;
-    object-position: center center;
-    transform: scale(1.45);
+    object-position: center top;
+    display: block;
+    background: #ffffff;
+}}
+.party-brand-candidate-fill {{
+    transform: scale(1.08);
     transform-origin: center center;
-    clip-path: inset(0 round 8px);
+}}
+.party-brand-candidate-tight {{
+    transform: scale(1.9);
+    transform-origin: center top;
 }}
 .party-brand-candidate-fallback {{
     display: flex;
@@ -1086,6 +1095,7 @@ def _render_party_brand_panel(selected_party: str, stronghold_df: pd.DataFrame) 
     .party-brand-panel {{
         grid-template-columns: 72px minmax(0, 1fr);
     }}
+    .party-brand-candidate-frame,
     .party-brand-candidate,
     .party-brand-candidate-fallback {{
         display: none;
@@ -1108,7 +1118,7 @@ def _render_party_brand_panel(selected_party: str, stronghold_df: pd.DataFrame) 
             <span class="party-brand-chip">ฐานเด่น {html.escape(strongest_label)}</span>
         </div>
     </div>
-    <div>{candidate_html}</div>
+    <div class="party-brand-candidate-frame">{candidate_html}</div>
 </div>
 """,
         unsafe_allow_html=True,

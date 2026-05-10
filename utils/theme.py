@@ -176,7 +176,16 @@ def inject_global_theme() -> None:
 
         .stTabs [data-baseweb="tab"][aria-selected="true"] {{
             color: var(--color-accent-dark);
-            border-bottom: 2px solid var(--color-accent);
+            border-bottom: 0 !important;
+        }}
+
+        .stTabs [data-baseweb="tab-highlight"] {{
+            background-color: transparent !important;
+            height: 0 !important;
+        }}
+
+        .stTabs [data-baseweb="tab-border"] {{
+            background-color: var(--color-divider) !important;
         }}
 
         div[data-baseweb="select"] > div,
