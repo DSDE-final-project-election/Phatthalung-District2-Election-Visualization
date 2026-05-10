@@ -6,7 +6,12 @@ import streamlit as st
 from tabs import tab_ballotBehavior, tab_candidatePartylistCompare, tab_districtOverview, tab_result, tab_strongholdArea
 from utils.loader import (
     load_constituency,
+    load_constituency_grouped_results,
+    load_constituency_results,
+    load_partylist_grouped_results,
+    load_partylist_results,
     load_phase_summary,
+    load_previous_66_grouped_results,
     load_subdistrict_summary,
 )
 from utils.theme import inject_global_theme
@@ -86,6 +91,11 @@ def _build_anomaly_df(*sources: tuple[str, pd.DataFrame]) -> pd.DataFrame:
 
 
 constituency_df = load_constituency()
+constituency_result_df = load_constituency_results()
+partylist_result_df = load_partylist_results()
+constituency_grouped_result_df = load_constituency_grouped_results()
+partylist_grouped_result_df = load_partylist_grouped_results()
+previous_66_grouped_df = load_previous_66_grouped_results()
 partylist_df = _read_csv("partylist_clean.csv")
 subdistrict_df = load_subdistrict_summary()
 phase_df = load_phase_summary()
@@ -96,11 +106,19 @@ anomaly_df = _build_anomaly_df(
 
 st.sidebar.title("Election Analytics")
 
+
+def election_day_rows(df: pd.DataFrame) -> pd.DataFrame:
+    if "vote_phase" not in df.columns:
+        return df
+    return df[df["vote_phase"] == "election_day"]
+
 available_districts = pd.concat(
     [
         _districts_from_csv("constituency_clean.csv"),
         _districts_from_csv("partylist_clean.csv"),
         constituency_df.get("district", pd.Series(dtype="object")),
+        constituency_result_df.get("district", pd.Series(dtype="object")),
+        partylist_result_df.get("district", pd.Series(dtype="object")),
         subdistrict_df.get("district", pd.Series(dtype="object")),
     ],
     ignore_index=True,
@@ -114,6 +132,8 @@ if selected_district != "All":
     filtered_subdistrict_df = subdistrict_df[subdistrict_df["district"].astype(str) == selected_district]
 else:
     filtered_df = constituency_df
+    filtered_constituency_result_df = constituency_result_df
+    filtered_partylist_result_df = partylist_result_df
     filtered_anomaly_df = anomaly_df
     filtered_subdistrict_df = subdistrict_df
 
@@ -125,7 +145,7 @@ tabs = st.tabs(
         "📊 Overview",
         "🚨 Result",
         "⚖ Compare",
-        "🌡 Heatmap",
+        "🗺 Stronghold",
         "🔬 Station Explorer",
         "🗳 Vote Phase",
     ]
@@ -135,13 +155,19 @@ with tabs[0]:
     tab_districtOverview.render(filtered_df, filtered_anomaly_df, selected_district)
 
 with tabs[1]:
-    tab_result.render(filtered_anomaly_df)
+    tab_result.render(
+        constituency_result_df,
+        partylist_result_df,
+        constituency_grouped_result_df,
+        partylist_grouped_result_df,
+        previous_66_grouped_df,
+    )
 
 with tabs[2]:
     tab_candidatePartylistCompare.render(filtered_df, selected_district)
 
 with tabs[3]:
-    tab_strongholdArea.render(filtered_subdistrict_df)
+    tab_strongholdArea.render(filtered_constituency_result_df, filtered_partylist_result_df)
 
 with tabs[4]:
     tab_ballotBehavior.render(filtered_df)

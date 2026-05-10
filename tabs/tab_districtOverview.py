@@ -291,7 +291,7 @@ def _select_overview_filters(scoped_df: pd.DataFrame, full_df: pd.DataFrame) -> 
     phase_col, subdistrict_col = st.columns([1, 1.6])
     with phase_col:
         selected_phase = st.selectbox(
-            "ช่วงเวลาเลือกตั้ง",
+            "ประเภทการลงคะแนน",
             phase_options,
             index=0,
             key="district_overview_vote_phase",
