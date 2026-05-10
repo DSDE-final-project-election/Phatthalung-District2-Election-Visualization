@@ -1,4 +1,15 @@
+import base64
+import mimetypes
+from functools import lru_cache
+from pathlib import Path
+
 import streamlit as st
+
+
+ROOT_DIR = Path(__file__).resolve().parents[1]
+FONT_DIR = ROOT_DIR / "assets" / "fonts"
+LOCAL_FONT_NAME = "Election Local"
+FONT_FAMILY = f'"IBM Plex Sans Thai", "{LOCAL_FONT_NAME}", "Noto Sans Thai", Tahoma, Arial, sans-serif'
 
 
 APP_COLORS = {
@@ -16,13 +27,70 @@ APP_COLORS = {
     "accent_dark": "#8D8578",
     "accent_soft": "#E9E1D2",
     "brown-bark": "#5B3916ff",
+    "signal_positive": "#5B7E3C",
+    "signal_warning": "#FFD65A",
+    "signal_orange": "#FF9D23",
+    "signal_negative": "#EA5252",
 }
 
 
-def _font_face_css() -> str:
-    return """
-    @import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&display=swap");
-    """
+def _font_weight_from_name(name: str) -> str:
+    lower_name = name.lower()
+    if "variable" in lower_name or "vf" in lower_name:
+        return "300 900"
+    if "black" in lower_name:
+        return "900"
+    if "extrabold" in lower_name or "extra-bold" in lower_name:
+        return "800"
+    if "bold" in lower_name:
+        return "700"
+    if "semibold" in lower_name or "semi-bold" in lower_name:
+        return "600"
+    if "medium" in lower_name:
+        return "500"
+    if "light" in lower_name:
+        return "300"
+    return "400"
+
+
+def _font_format(path: Path) -> str:
+    suffix = path.suffix.lower()
+    if suffix == ".woff2":
+        return "woff2"
+    if suffix == ".woff":
+        return "woff"
+    if suffix == ".otf":
+        return "opentype"
+    return "truetype"
+
+
+@lru_cache(maxsize=1)
+def font_face_css() -> str:
+    font_files = []
+    for pattern in ("*.woff2", "*.woff", "*.otf", "*.ttf"):
+        font_files.extend(FONT_DIR.glob(pattern))
+
+    if not font_files:
+        return ""
+
+    rules = []
+    for path in sorted(font_files):
+        mime_type = mimetypes.guess_type(path.name)[0] or "font/woff2"
+        encoded = base64.b64encode(path.read_bytes()).decode("ascii")
+        style = "italic" if "italic" in path.stem.lower() else "normal"
+        weight = _font_weight_from_name(path.stem)
+        rules.append(
+            f"""
+            @font-face {{
+                font-family: "{LOCAL_FONT_NAME}";
+                src: url("data:{mime_type};base64,{encoded}") format("{_font_format(path)}");
+                font-style: {style};
+                font-weight: {weight};
+                font-display: swap;
+            }}
+            """
+        )
+    return "\n".join(rules)
 
 
 def inject_global_theme() -> None:
@@ -34,16 +102,37 @@ def inject_global_theme() -> None:
     st.markdown(
         f"""
         <style>
-        {_font_face_css()}
+        {font_face_css()}
         :root {{
             {css_variables}
             --color-divider: color-mix(in srgb, var(--color-accent-hover) 72%, var(--color-border));
-            --font-sans: "IBM Plex Sans Thai", "Noto Sans Thai", Tahoma, Arial, sans-serif;
+            --font-sans: {FONT_FAMILY};
         }}
 
         html, body, .stApp, .stApp * {{
             font-family: var(--font-sans) !important;
             letter-spacing: 0 !important;
+        }}
+
+        .stApp [class*="material-icons"],
+        .stApp [class*="material-symbols"],
+        .stApp [data-testid="stIconMaterial"],
+        .stApp [data-testid="stIconMaterial"] * {{
+            font-family: "Material Symbols Rounded", "Material Symbols Outlined", "Material Icons" !important;
+            font-weight: normal !important;
+            font-style: normal !important;
+            font-size: inherit;
+            line-height: 1;
+            letter-spacing: normal !important;
+            text-transform: none;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            white-space: nowrap;
+            direction: ltr;
+            -webkit-font-feature-settings: "liga";
+            -webkit-font-smoothing: antialiased;
+            font-feature-settings: "liga";
         }}
 
         .stApp {{

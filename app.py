@@ -112,6 +112,13 @@ def election_day_rows(df: pd.DataFrame) -> pd.DataFrame:
         return df
     return df[df["vote_phase"] == "election_day"]
 
+
+def _filter_by_district(df: pd.DataFrame, district: str) -> pd.DataFrame:
+    if district == "All" or df.empty or "district" not in df.columns:
+        return df
+    return df[df["district"].astype(str) == district]
+
+
 available_districts = pd.concat(
     [
         _districts_from_csv("constituency_clean.csv"),
@@ -127,9 +134,11 @@ district_options = sorted(available_districts.unique())
 selected_district = st.sidebar.selectbox("District", ["All"] + district_options)
 
 if selected_district != "All":
-    filtered_df = constituency_df[constituency_df["district"].astype(str) == selected_district]
-    filtered_anomaly_df = anomaly_df[anomaly_df["district"].astype(str) == selected_district]
-    filtered_subdistrict_df = subdistrict_df[subdistrict_df["district"].astype(str) == selected_district]
+    filtered_df = _filter_by_district(constituency_df, selected_district)
+    filtered_constituency_result_df = _filter_by_district(constituency_result_df, selected_district)
+    filtered_partylist_result_df = _filter_by_district(partylist_result_df, selected_district)
+    filtered_anomaly_df = _filter_by_district(anomaly_df, selected_district)
+    filtered_subdistrict_df = _filter_by_district(subdistrict_df, selected_district)
 else:
     filtered_df = constituency_df
     filtered_constituency_result_df = constituency_result_df
@@ -144,7 +153,7 @@ tabs = st.tabs(
     [
         "📊 Overview",
         "🚨 Result",
-        "🗺 Map",
+        "⚖ Compare",
         "🗺 Stronghold",
         "🔬 Station Explorer",
         "🗳 Vote Phase",
@@ -164,7 +173,7 @@ with tabs[1]:
     )
 
 with tabs[2]:
-    tab_candidatePartylistCompare.render(filtered_df)
+    tab_candidatePartylistCompare.render(filtered_df, selected_district)
 
 with tabs[3]:
     tab_strongholdArea.render(filtered_constituency_result_df, filtered_partylist_result_df)
