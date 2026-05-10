@@ -16,11 +16,12 @@ from utils.loader import (
 )
 from utils.theme import inject_global_theme
 
-st.set_page_config(layout="wide", page_title="Election Analytics")
+st.set_page_config(layout="wide", page_title="พัทลุง เขต 2 - Election Analytics")
 inject_global_theme()
 
 DATA_DIR = Path(__file__).resolve().parent / "data"
 NORMAL_ANOMALY = "NORMAL"
+EXCLUDED_OVERVIEW_ANOMALIES = {"ADVANCE_VOTING_EXCLUDED"}
 
 
 def _read_csv(filename: str) -> pd.DataFrame:
@@ -71,7 +72,10 @@ def _build_anomaly_df(*sources: tuple[str, pd.DataFrame]) -> pd.DataFrame:
         if source_df.empty or "anomaly_type" not in source_df.columns:
             continue
 
-        anomaly_mask = source_df["anomaly_type"].fillna(NORMAL_ANOMALY).astype(str) != NORMAL_ANOMALY
+        anomaly_type = source_df["anomaly_type"].fillna(NORMAL_ANOMALY).astype(str)
+        anomaly_mask = anomaly_type.ne(NORMAL_ANOMALY) & ~anomaly_type.isin(EXCLUDED_OVERVIEW_ANOMALIES)
+        if "vote_phase" in source_df.columns:
+            anomaly_mask &= source_df["vote_phase"].fillna("").astype(str).eq("election_day")
         frame = source_df.loc[anomaly_mask].copy()
         if frame.empty:
             continue
@@ -104,7 +108,7 @@ anomaly_df = _build_anomaly_df(
     ("partylist", partylist_df),
 )
 
-st.sidebar.title("Election Analytics")
+st.sidebar.title("พัทลุง เขต 2")
 
 
 def election_day_rows(df: pd.DataFrame) -> pd.DataFrame:
@@ -114,7 +118,7 @@ def election_day_rows(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def _filter_by_district(df: pd.DataFrame, district: str) -> pd.DataFrame:
-    if district == "All" or df.empty or "district" not in df.columns:
+    if district == "ทั้งหมด" or df.empty or "district" not in df.columns:
         return df
     return df[df["district"].astype(str) == district]
 
@@ -131,9 +135,9 @@ available_districts = pd.concat(
     ignore_index=True,
 ).dropna().astype(str)
 district_options = sorted(available_districts.unique())
-selected_district = st.sidebar.selectbox("District", ["All"] + district_options)
+selected_district = st.sidebar.selectbox("อำเภอ", ["ทั้งหมด"] + district_options)
 
-if selected_district != "All":
+if selected_district != "ทั้งหมด":
     filtered_df = _filter_by_district(constituency_df, selected_district)
     filtered_constituency_result_df = _filter_by_district(constituency_result_df, selected_district)
     filtered_partylist_result_df = _filter_by_district(partylist_result_df, selected_district)
@@ -146,17 +150,16 @@ else:
     filtered_anomaly_df = anomaly_df
     filtered_subdistrict_df = subdistrict_df
 
-st.sidebar.metric("Total Stations", _station_count(filtered_df))
-st.sidebar.metric("Total Anomalies", len(filtered_anomaly_df))
+st.sidebar.metric("หน่วยเลือกทั้งหมด", _station_count(filtered_df))
+st.sidebar.metric("จำนวนความผิดปกติ", len(filtered_anomaly_df))
 
 tabs = st.tabs(
     [
-        "📊 Overview",
-        "🚨 Result",
-        "⚖ Compare",
-        "🗺 Stronghold",
-        "🔬 Station Explorer",
-        "🗳 Vote Phase",
+        "Overview",
+        "Result",
+        "Compare",
+        "Stronghold",
+        "Ballot Behavior"
     ]
 )
 
@@ -179,4 +182,4 @@ with tabs[3]:
     tab_strongholdArea.render(filtered_constituency_result_df, filtered_partylist_result_df)
 
 with tabs[4]:
-    tab_ballotBehavior.render(filtered_df)
+    tab_ballotBehavior.render(filtered_df, selected_district)
