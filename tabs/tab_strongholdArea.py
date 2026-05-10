@@ -979,9 +979,15 @@ def _render_party_brand_panel(selected_party: str, stronghold_df: pd.DataFrame) 
         "party-brand-logo",
         f"{party_name} logo",
     )
+    candidate_tight_classes = {
+        "ประชาธิปัตย์": "party-brand-candidate-democrat",
+        "เพื่อไทย": "party-brand-candidate-pueathai",
+    }
     candidate_class = "party-brand-candidate party-brand-candidate-fill"
     if selected_party == "ภูมิใจไทย":
         candidate_class += " party-brand-candidate-tight"
+    if selected_party in candidate_tight_classes:
+        candidate_class += f" {candidate_tight_classes[selected_party]}"
     candidate_html = _image_html(
         party_info.get("pm_candidate_image_ref", ""),
         candidate_class,
@@ -1083,6 +1089,16 @@ def _render_party_brand_panel(selected_party: str, stronghold_df: pd.DataFrame) 
 .party-brand-candidate-tight {{
     transform: scale(1.9);
     transform-origin: center top;
+}}
+.party-brand-candidate-democrat {{
+    object-position: center center;
+    transform: translateY(32px) scale(2.7);
+    transform-origin: center center;
+}}
+.party-brand-candidate-pueathai {{
+    object-position: center center;
+    transform: translateY(32px) scale(2.5);
+    transform-origin: center center;
 }}
 .party-brand-candidate-fallback {{
     display: flex;
