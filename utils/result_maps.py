@@ -242,6 +242,13 @@ def current_party_scores(
     return party_scores
 
 
+def candidate_heatmap_label(candidate: object, candidate_party_map: dict[str, str]) -> str:
+    """Return a constituency heatmap label as candidate name with party."""
+    candidate_name = str(candidate)
+    party = candidate_party_map.get(candidate_name)
+    return f"{candidate_name} ({party})" if party else candidate_name
+
+
 def previous_party_scores(df: pd.DataFrame, result_type: str) -> pd.DataFrame:
     """Return 2566 scores aggregated to party labels."""
     prefix = "บช_" if result_type == "partylist" else "เขต_"
@@ -1028,15 +1035,24 @@ def heatmap_share(
             axis=1,
         )
 
-    party_scores = current_party_scores(working, result_type, base_columns, candidate_party_map)
-    if party_scores.empty:
+    scores = (
+        current_entity_scores(working, base_columns)
+        if result_type == "constituency"
+        else current_party_scores(working, result_type, base_columns, candidate_party_map)
+    )
+    if scores.empty:
         return pd.DataFrame()
 
-    score_df = pd.concat([working[["area_label"]], party_scores], axis=1)
-    grouped = score_df.groupby("area_label")[party_scores.columns].sum()
+    score_df = pd.concat([working[["area_label"]], scores], axis=1)
+    grouped = score_df.groupby("area_label")[scores.columns].sum()
     selected = list(grouped.sum().sort_values(ascending=False).head(top_n).index)
     denominator = grouped[selected].sum(axis=1).replace(0, pd.NA)
-    return grouped[selected].div(denominator, axis=0).fillna(0)
+    share_df = grouped[selected].div(denominator, axis=0).fillna(0)
+    if result_type == "constituency":
+        share_df = share_df.rename(
+            columns=lambda column: candidate_heatmap_label(column, candidate_party_map)
+        )
+    return share_df
 
 
 def render_heatmap(share_df: pd.DataFrame) -> None:
