@@ -121,6 +121,13 @@ def _load_csv_cached(
     return pd.DataFrame(columns=list(columns))
 
 
+def _load_csv(filename: str, columns: list[str]) -> pd.DataFrame:
+    path = DATA_DIR / filename
+    if path.exists():
+        return pd.read_csv(path)
+    return pd.DataFrame(columns=columns)
+
+
 def load_constituency() -> pd.DataFrame:
     return _load_csv_cached(
         "constituency_clean.csv",
