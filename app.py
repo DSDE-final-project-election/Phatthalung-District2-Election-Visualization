@@ -124,7 +124,7 @@ tabs = st.tabs(
     [
         "📊 Overview",
         "🚨 Result",
-        "🗺 Map",
+        "⚖ Compare",
         "🌡 Heatmap",
         "🔬 Station Explorer",
         "🗳 Vote Phase",
@@ -138,7 +138,7 @@ with tabs[1]:
     tab_result.render(filtered_anomaly_df)
 
 with tabs[2]:
-    tab_candidatePartylistCompare.render(filtered_df)
+    tab_candidatePartylistCompare.render(filtered_df, selected_district)
 
 with tabs[3]:
     tab_strongholdArea.render(filtered_subdistrict_df)

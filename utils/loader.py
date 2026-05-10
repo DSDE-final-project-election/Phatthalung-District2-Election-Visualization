@@ -83,33 +83,74 @@ PHASE_SUMMARY_COLUMNS = [
 ]
 
 
-def _load_csv(filename: str, columns: list[str]) -> pd.DataFrame:
-    try:
-        return pd.read_csv(DATA_DIR / filename)
-    except FileNotFoundError:
-        return pd.DataFrame(columns=columns)
+def _data_file_version(filename: str) -> float:
+    path = DATA_DIR / filename
+    return path.stat().st_mtime if path.exists() else 0.0
 
 
 @st.cache_data
+def _load_csv_cached(
+    filename: str,
+    fallback_filename: str,
+    columns: tuple[str, ...],
+    file_version: float,
+    fallback_version: float,
+) -> pd.DataFrame:
+    primary_path = DATA_DIR / filename
+    fallback_path = DATA_DIR / fallback_filename if fallback_filename else None
+
+    if primary_path.exists():
+        return pd.read_csv(primary_path)
+    if fallback_path and fallback_path.exists():
+        return pd.read_csv(fallback_path)
+    return pd.DataFrame(columns=list(columns))
+
+
 def load_constituency() -> pd.DataFrame:
-    return _load_csv("constituency_clean.csv", CONSTITUENCY_COLUMNS)
+    return _load_csv_cached(
+        "constituency_clean.csv",
+        "constituency.csv",
+        tuple(CONSTITUENCY_COLUMNS),
+        _data_file_version("constituency_clean.csv"),
+        _data_file_version("constituency.csv"),
+    )
 
 
-@st.cache_data
 def load_partylist() -> pd.DataFrame:
-    return _load_csv("partylist_clean.csv", PARTYLIST_COLUMNS)
+    return _load_csv_cached(
+        "partylist_clean.csv",
+        "partylist.csv",
+        tuple(PARTYLIST_COLUMNS),
+        _data_file_version("partylist_clean.csv"),
+        _data_file_version("partylist.csv"),
+    )
 
 
-@st.cache_data
 def load_cross_form_validation() -> pd.DataFrame:
-    return _load_csv("cross_form_validation.csv", CROSS_FORM_COLUMNS)
+    return _load_csv_cached(
+        "cross_form_validation.csv",
+        "",
+        tuple(CROSS_FORM_COLUMNS),
+        _data_file_version("cross_form_validation.csv"),
+        0.0,
+    )
 
 
-@st.cache_data
 def load_subdistrict_summary() -> pd.DataFrame:
-    return _load_csv("subdistrict_summary.csv", SUBDISTRICT_SUMMARY_COLUMNS)
+    return _load_csv_cached(
+        "subdistrict_summary.csv",
+        "",
+        tuple(SUBDISTRICT_SUMMARY_COLUMNS),
+        _data_file_version("subdistrict_summary.csv"),
+        0.0,
+    )
 
 
-@st.cache_data
 def load_phase_summary() -> pd.DataFrame:
-    return _load_csv("phase_summary.csv", PHASE_SUMMARY_COLUMNS)
+    return _load_csv_cached(
+        "phase_summary.csv",
+        "",
+        tuple(PHASE_SUMMARY_COLUMNS),
+        _data_file_version("phase_summary.csv"),
+        0.0,
+    )
