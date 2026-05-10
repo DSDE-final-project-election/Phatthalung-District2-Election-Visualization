@@ -1,0 +1,5 @@
+﻿segment,const_ballot_total,party_ballot_total,ballot_total_cross_mismatch,const_ballot_valid,party_ballot_valid,ballot_valid_cross_mismatch,const_integrity_score,party_integrity_score,const_status,party_status
+election_day_baseline,114959,114959,0,110312,109680,632,98.58584364860515,78.10914260784023,BASELINE,BASELINE
+out_of_district_advance_aggregated,7404,7405,1,6758,7110,352,97.82144786601837,99.01282916948007,UNUSUAL_SPECIAL_VOTING_PATTERN,UNUSUAL_SPECIAL_VOTING_PATTERN
+in_district_advance,9,9,0,9,9,0,100.0,100.0,LOW_SAMPLE_REFERENCE_ONLY,LOW_SAMPLE_REFERENCE_ONLY
+advance_total,7413,7414,1,6767,7119,352,97.8240928099285,99.0140275155112,UNUSUAL_SPECIAL_VOTING_PATTERN,UNUSUAL_SPECIAL_VOTING_PATTERN

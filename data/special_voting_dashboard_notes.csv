@@ -1,0 +1,6 @@
+﻿key,value
+recommended_dashboard_section,Show special voting in a separate panel from spatial clusters.
+spatial_rule,Do not include in_district_advance or out_of_district_advance in lat/long clustering.
+out_of_district_rule,Aggregate all out_of_district_advance rows into one non-spatial special segment.
+in_district_rule,Keep in_district_advance as a separate non-spatial row; sample is very small.
+advance_total_rule,"Use advance_total only as a summary, not as a replacement for the two advance segments."
